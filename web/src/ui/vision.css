@@ -23,6 +23,10 @@ html[data-vision='nocturne'] .maplibregl-canvas {
   filter: url(#vision-nocturne);
 }
 
+html[data-vision='nocturne'][data-nuit] .maplibregl-canvas {
+  filter: url(#vision-nocturne-nuit);
+}
+
 html[data-vision='thermique'] .maplibregl-canvas {
   filter: url(#vision-thermique);
 }

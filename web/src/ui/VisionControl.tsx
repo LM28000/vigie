@@ -85,6 +85,17 @@ function VisionFilters() {
           </feComponentTransfer>
         </filter>
 
+        {/* Vision nocturne sur le fond de nuit : comme un intensificateur de lumière, la courbe amplifie fortement les
+            basses lumières (le fond de nuit tient presque entier sous 35 % de luminance), sinon les bâtiments disparaissent. */}
+        <filter id="vision-nocturne-nuit" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={LUMA} />
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="0.01 0.12 0.21 0.26 0.28 0.3 0.3 0.3 0.3" />
+            <feFuncG type="table" tableValues="0.03 0.42 0.72 0.88 0.95 1 1 1 1" />
+            <feFuncB type="table" tableValues="0.01 0.09 0.16 0.19 0.2 0.22 0.22 0.22 0.22" />
+          </feComponentTransfer>
+        </filter>
+
         {/* Thermique : luminance puis palette par canal (tables ci-dessus), une version pour le fond de jour et une pour la nuit. */}
         {palettes.map(([id, range]) => (
           <filter key={id} id={id} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
