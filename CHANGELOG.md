@@ -2,6 +2,12 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 15 novembre 2026 — Couche « Caméras »
+
+- **Caméras** (catégorie Territoire) : vidéoprotection d'OpenStreetMap (≈ 80 000 points `man_made=surveillance`, extraction Overpass hebdomadaire par le serveur), avec **cône de vision 3D** posé sur le relief quand la direction est connue et cercle pour les dômes sans direction ; webcams publiques avec image : **Windy Webcams** (clé `WINDY_WEBCAMS_KEY` côté serveur, lien d'image demandé à l'ouverture de la fiche et gardé 8 minutes au plus) et **caméras de trafic Criter** de la Métropole de Lyon (Licence Ouverte 2.0). Deux réglages d'affichage.
+- Fiche : nouveau champ `image` (`InfoContent.image`) : image rechargée tant que la fiche est ouverte, jamais agrandie, avec heure, texte alternatif et lien.
+- Documentation : sources et licences, variable `WINDY_WEBCAMS_KEY` ([docs/couches.md](docs/couches.md#caméras--sources-et-choix)).
+
 ## 14 novembre 2026 — Relief plus fin, avions sans refus
 
 - **Relief Mapterhorn** : `maxzoom` relevé de 12 à 16 (tuiles de 0,8 m par pixel en France issues du LiDAR) ; le relief « LiDAR HD » en 3D devient un réglage éteint par défaut, son altitude étant la même jusqu'au zoom 16 ([docs/rendu-3d.md](docs/rendu-3d.md)).

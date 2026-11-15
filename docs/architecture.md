@@ -60,6 +60,7 @@ flowchart LR
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
+| `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
 | `tiles/` | Moteur de tuiles vectorielles : voir [moteur-de-tuiles.md](moteur-de-tuiles.md). |
 | `analyse.rs` | `POST /api/analyse` : voir [analyse-de-zone.md](analyse-de-zone.md). |
 | `history/` | Enregistrement et relecture : voir [historique-et-relecture.md](historique-et-relecture.md). |
@@ -94,7 +95,7 @@ flowchart TB
 |---|---|
 | `core/` | Le moteur, sans dépendance à React : horloge, contrat de module, gestionnaire, scènes, état partagé dans l'adresse, relecture, visite guidée, analyse de zone. |
 | `map/` | Fond de carte OpenFreeMap « Liberty » repeint (`calmStyle.ts`), globe, relief, branchement de deck.gl (`MapView.tsx`), tuiles vectorielles du serveur (`vectorTiles.ts`), désencombrement des étiquettes. |
-| `modules/` | Une couche par fichier (30 modules, déclarés dans `modules/index.ts`), plus des aides communes (`symbols.ts`, atlas d'icônes, couleurs de statut). |
+| `modules/` | Une couche par fichier (31 modules, déclarés dans `modules/index.ts`), plus des aides communes (`symbols.ts`, atlas d'icônes, couleurs de statut). |
 | `models/` | Maquettes 3D construites dans le code et éclairage par le soleil : voir [rendu-3d.md](rendu-3d.md). |
 | `search/` | La recherche universelle : un fournisseur de résultats par source. |
 | `ui/` | Pastilles, catalogue de couches, frise du temps, fiche d'objet, accueil, feuille du téléphone, visite, outil de zone. |

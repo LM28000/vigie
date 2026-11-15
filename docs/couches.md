@@ -1,6 +1,6 @@
 # Les couches
 
-La carte propose **30 couches** (modules de `web/src/modules/`, déclarés dans `modules/index.ts`), rangées en six catégories : Transports, Environnement, Énergie, Territoire, Ciel et espace, Histoire. Ce document donne, pour chacune, ce qu'elle montre et sa source (tableau détaillé), son rythme de rafraîchissement et ses réglages (tableau de référence), puis les notes techniques de quelques couches.
+La carte propose **31 couches** (modules de `web/src/modules/`, déclarés dans `modules/index.ts`), rangées en six catégories : Transports, Environnement, Énergie, Territoire, Ciel et espace, Histoire. Ce document donne, pour chacune, ce qu'elle montre et sa source (tableau détaillé), son rythme de rafraîchissement et ses réglages (tableau de référence), puis les notes techniques de quelques couches.
 
 Les couches se combinent : l'adresse de la page garde les couches affichées (`couches=trains,voies`), leurs réglages (`reglages=trains.couleur:retard`) et l'instant (`t=…`). Les identifiants ci-dessous sont ceux de cette adresse. Les licences et attributions de chaque source sont dans [sources-et-licences.md](sources-et-licences.md).
 
@@ -35,13 +35,15 @@ Les couches se combinent : l'adresse de la page garde les couches affichées (`c
 | `immobilier` | Prix de l'immobilier | Territoire | une fois | tuiles refaites chaque semestre | Biens, Période, Référence, Affichage |
 | `elections` | Élections | Territoire | 2 min (tant qu'un scrutin se prépare) | tuiles préparées une fois par scrutin | Scrutin, Afficher, Candidat ou liste, Relief |
 | `lidar` | Relief LiDAR HD | Territoire | une fois | l'IGN, directement pour les estompages ; le serveur convertit le MNT pour le relief 3D | Produit, Relief 3D, Opacité, Affichée à partir du zoom |
+| `cameras` | Caméras | Territoire | 60 s (OpenStreetMap relu au plus une fois par jour, catalogue Windy une fois par heure) | vidéoprotection : extraction Overpass hebdomadaire ; Windy : catalogue toutes les 12 h, lien d'image demandé à l'ouverture d'une fiche (8 min de cache) ; Criter : une lecture par minute | Vidéoprotection (points et cônes, points, masquée), Webcams (Windy et Criter, Criter seul, masquées) |
 | `jour-nuit` | Jour et nuit | Ciel et espace | calcul local | aucun | aucun |
 | `ombres-batiments` | Ombres des bâtiments | Ciel et espace | calcul local | aucun | aucun |
 | `satellites` | Satellites | Ciel et espace | 1 h | éléments orbitaux toutes les 3 h | Starlink |
 | `pluie` | Radar de pluie | Ciel et espace | 5 min | aucun : le navigateur lit RainViewer | aucun |
 | `vent` | Vent | Ciel et espace | 30 min | 6 h | aucun |
 | `photos` | Photos aériennes anciennes | Histoire | calcul local | aucun : le navigateur lit l'IGN | Époque des photos, Comparaison, Opacité |
-| `monuments` | Monuments historiques | Histoire | 24 h | base relue chaque semaine | Protection, Genre |
+| `monuments` | Caméras | **Vidéoprotection** : les ~80 000 caméras `man_made=surveillance` d'OpenStreetMap (France métropolitaine). Un point par caméra dès le zoom 11 (sombre : espace public ou voie ; clair : lieu privé ou intérieur) ; dès le zoom 15, un **cône de vision** posé sur le relief quand la direction est connue (champ de 60°, 120° pour une caméra panoramique, portée de 35 m par défaut, déduite de la hauteur et de l'inclinaison quand OSM les donne), un cercle pour un dôme sans direction ; dès le zoom 16, le volume du cône, de la caméra au sol. **Webcams** : Windy Webcams (si la clé `WINDY_WEBCAMS_KEY` est fournie) et 15 caméras de trafic Criter de la Métropole de Lyon ; rond sombre = webcam, carré sombre = caméra de trafic. Réglages : vidéoprotection (points et cônes, points seulement, masquée), webcams (Windy et Criter, Criter seulement, masquées). Fiche : pour une caméra OSM, type, zone surveillée, exploitant, direction, inclinaison, fixation, lien vers l'objet OSM ; pour une webcam, l'**image** (rechargée tant que la fiche est ouverte, jamais agrandie, lien vers la page Windy), le nom, la source. | OpenStreetMap (ODbL) ; Windy Webcams ; Métropole de Lyon, Criter (Licence Ouverte 2.0) |
+| Monuments historiques | Histoire | 24 h | base relue chaque semaine | Protection, Genre |
 
 ## Galerie
 
@@ -105,6 +107,18 @@ La vitesse affichée est donc une **estimation**. La SNCF ne publie pas la posit
 **Clic sur un train** : tout son trajet est surligné, avec la partie déjà faite en gris. Sa fiche liste les arrêts avec leurs horaires et retards, et donne la vitesse estimée et la vitesse autorisée de la ligne. Le bouton « Suivre » fait suivre le train par la caméra ; déplacer la carte arrête le suivi.
 
 **Clic sur une gare** (visibles à partir du zoom 8,5) : son tableau des départs et des arrivées, trains supprimés compris. Chaque ligne d'un tableau mène au train ou à la gare correspondante.
+
+### Caméras : sources et choix
+
+**Vidéoprotection d'OpenStreetMap.** `server/src/cameras.rs` interroge Overpass (`node["man_made"="surveillance"]`, dans la France `ISO3166-1=FR`) **une fois par semaine**, en trente requêtes (trente rectangles de la France, de quelques Mo au plus : les six grands rectangles des voies ferrées étaient coupés par Overpass) qui se suivent à 5 s, et range le résultat réduit en colonnes (identifiant, position, genre, type, direction, inclinaison, zone, fixation, hauteur, exploitant) dans `DATA_DIR/cameras/cameras.json.gz` ; la réponse reste compressée en mémoire (≈ 1,5 Mo pour ≈ 80 000 caméras). On n'interroge pas Overpass à chaque déplacement de carte : le service est gratuit, souvent saturé, et la base change peu. Le navigateur relit l'extraction au plus une fois par jour.
+
+Lecture des balises (testée sur un extrait réel) : `surveillance:type` absent compte pour une caméra (cas courant), `ALPR` pour un lecteur de plaques, `guard` et `gunshot_detector` sont écartés ; `camera:direction` (degrés, point cardinal, première valeur d'une liste, repli sur `direction`) ; **`camera:direction=360` n'est pas une direction** (les dômes l'emploient pour « tout autour » : on le traite comme inconnu) ; `camera:angle` est, selon le wiki d'OpenStreetMap, l'**inclinaison** de la caméra sous l'horizontale et non son champ de vision : il ne sert qu'à déduire la portée (`hauteur / tan(inclinaison)`, entre 8 et 50 m) et les valeurs absurdes (`NW`, 180) sont ignorées. Le champ de 60° est une hypothèse (OSM n'a pas de balise courante pour l'ouverture) : le cône est une indication, pas la zone réellement filmée. Environ une caméra sur six porte une direction à Paris.
+
+**Webcams Windy** (`server/src/webcams.rs`). API v3, clé `WINDY_WEBCAMS_KEY` lue côté serveur seulement (en-tête `x-windy-api-key`), jamais envoyée au navigateur ; sans elle, `/api/webcams/windy` répond `{"actif":false,…}`, la légende et le résumé de la couche disent « clé absente ». Conditions du niveau gratuit : les liens d'image expirent au bout de 10 minutes, donc **aucun lien n'est gardé dans le catalogue** ; le catalogue (identifiant, position, titre, ville, page Windy) est relevé toutes les 12 h par rectangles (`bbox` + `countries=FR`, 50 résultats par page ; le niveau gratuit s'arrête à 1 050 résultats par filtre : un rectangle plus peuplé est coupé en quatre), gardé sur le disque sans lien ; le lien d'une image n'est demandé qu'à l'ouverture d'une fiche (`GET /api/webcams/windy/image/{id}`, une redirection vers l'image `preview` de 400 px, ou la miniature), gardé 8 minutes au plus, une demande à la fois, au plus 40 par minute pour tous les visiteurs. L'image n'est jamais agrandie, renvoie vers la page de la webcam sur Windy et porte la mention « Image : Windy Webcams ». Les webcams y sont publiées par leurs propriétaires.
+
+**Caméras Criter (Métropole de Lyon).** Jeu « Caméras web Criter de la Métropole de Lyon » (data.gouv.fr, Licence Ouverte 2.0) : 15 caméras de circulation dont l'image est extraite chaque minute du flux vidéo. Le serveur relit la liste (WFS de data.grandlyon.com, 10 Ko) chaque minute ; le navigateur charge l'image directement sur `download.data.grandlyon.com`, la recharge chaque minute tant que la fiche est ouverte et affiche l'heure de l'image donnée par la source.
+
+**Autres flux ouverts repérés sur data.gouv.fr** (Licence Ouverte 2.0, non intégrés) : les webcams du pont de Saint-Nazaire et des bacs de Loire (Département de Loire-Atlantique, images en temps réel), les webcams d'Orléans Métropole et celles du littoral d'Anglet (jeux de localisation). Le nombre de caméras est faible et chaque flux a son format d'image : à ajouter au besoin, sur le modèle de Criter.
 
 ### Photos aériennes : le rideau avant / après
 

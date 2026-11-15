@@ -10,6 +10,7 @@
 #   AISSTREAM_API_KEY=…                clé aisstream.io de la couche « Bateaux » (secrète : chmod 600 .env)
 #   ATMO_USERNAME=… ATMO_PASSWORD=…    compte Atmo Data de la couche « Qualité de l'air » (secrets)
 #   IDFM_PRIM_API_KEY='…'              clé PRIM d'Île-de-France Mobilités (transports d'Île-de-France ; secrète, entre apostrophes)
+#   WINDY_WEBCAMS_KEY='…'              clé Windy Webcams (webcams de la couche « Caméras » ; secrète, entre apostrophes)
 
 name: carte-vivante
 
@@ -32,6 +33,8 @@ services:
       ATMO_PASSWORD: "${ATMO_PASSWORD:-}"
       # Vide = métro, RER, Transilien et tramways d'Île-de-France ignorés. Clé PRIM d'Île-de-France Mobilités : elle ne sort jamais du serveur.
       IDFM_PRIM_API_KEY: "${IDFM_PRIM_API_KEY:-}"
+      # Vide = webcams Windy de la couche « Caméras » désactivées. Clé Windy Webcams : elle ne sort jamais du serveur.
+      WINDY_WEBCAMS_KEY: "${WINDY_WEBCAMS_KEY:-}"
       # Facultatifs : modes (« metro,tram,train,cable » par défaut ; ajouter « bus » demande +80 Mo en permanence et +175 Mo de pic : voir docs/couches.md, pas avec 1 Go), intervalle du relevé en secondes (180), budget de mémoire en Mo (100).
       IDFM_MODES: "${IDFM_MODES:-}"
       IDFM_INTERVALLE_S: "${IDFM_INTERVALLE_S:-}"

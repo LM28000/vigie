@@ -321,7 +321,7 @@ pub async fn ensure_downloaded(http: &reqwest::Client, dir: &Path) -> Result<()>
 
 /// Overpass est un service gratuit souvent saturé : on réessaie en doublant l'attente
 /// à chaque échec (30 s, 1 min, 2 min…), comme il le demande.
-async fn overpass(http: &reqwest::Client, query: &str) -> Result<Vec<u8>> {
+pub(crate) async fn overpass(http: &reqwest::Client, query: &str) -> Result<Vec<u8>> {
     let body = format!("data={}", form_encode(query));
     let mut wait = Duration::from_secs(30);
     for attempt in 1..=6 {

@@ -28,7 +28,7 @@ Projet personnel, né pour apprendre : une carte où tout se déplace, où l'on 
 
 L'écran a quatre zones fixes : la recherche universelle en haut à gauche (`⌘K` ou `/` : ville, adresse, gare, train, vol, navire, couche, date), les pastilles des couches affichées, la fiche de l'objet choisi à droite, et la frise du temps en bas (de −7 jours à +2 jours). L'adresse de la page garde tout (vue, couches, réglages, instant, objet choisi) : un lien partagé rouvre exactement la même carte. Une visite guidée de trois minutes présente les temps forts. Voir [docs/utilisation.md](docs/utilisation.md).
 
-La liste complète des 30 couches, avec leur source, leur rythme de rafraîchissement et leurs réglages, est dans [docs/couches.md](docs/couches.md).
+La liste complète des 31 couches, avec leur source, leur rythme de rafraîchissement et leurs réglages, est dans [docs/couches.md](docs/couches.md).
 
 ### Transports en temps réel
 
@@ -132,7 +132,7 @@ flowchart LR
     R["RAPTOR · tracés des trains<br/>analyse de zone"]
   end
   subgraph Site["Site (navigateur)"]
-    K["Horloge"] --> M["Gestionnaire de modules"] --> L["30 couches<br/>MapLibre + deck.gl"]
+    K["Horloge"] --> M["Gestionnaire de modules"] --> L["31 couches<br/>MapLibre + deck.gl"]
   end
   E --> API["API HTTP"]
   T --> API

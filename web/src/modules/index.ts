@@ -9,6 +9,7 @@ import { accidents } from './accidents';
 import { air } from './air';
 import { bikes } from './bikes';
 import { buildingShadows } from './buildingShadows';
+import { cameras } from './cameras';
 import { chargers } from './chargers';
 import { couverture } from './couverture';
 import { dayNight } from './dayNight';
@@ -40,5 +41,5 @@ export const MODULES: LayerModule[] = [
   floods, tides, weatherAlerts, air, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections,
   dayNight, buildingShadows, satellites, rain, wind,
-  aerialPhotos, lidar, monuments, accidents,
+  aerialPhotos, lidar, cameras, monuments, accidents,
 ];

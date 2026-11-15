@@ -1,0 +1,44 @@
+{
+  "total": 1283,
+  "webcams": [
+    {
+      "webcamId": 1179853135,
+      "title": "Lyon: Place Bellecour",
+      "viewCount": 128261,
+      "status": "active",
+      "lastUpdatedOn": "2026-11-15T14:52:10.000Z",
+      "location": {
+        "city": "Lyon",
+        "region": "Auvergne-Rhône-Alpes",
+        "region_code": "FR.84",
+        "country": "France",
+        "country_code": "FR",
+        "continent": "Europe",
+        "continent_code": "EU",
+        "latitude": 45.757880,
+        "longitude": 4.832590
+      },
+      "urls": {
+        "detail": "https://webcams.windy.com/webcams/1179853135",
+        "edit": "https://webcams-admin.windy.com/webcams/1179853135",
+        "provider": "https://www.example.org/"
+      }
+    },
+    {
+      "webcamId": 1179853136,
+      "title": "Ancienne webcam désactivée",
+      "viewCount": 12,
+      "status": "disabled",
+      "lastUpdatedOn": "2020-03-08T12:17:24.000Z",
+      "location": { "city": "Paris", "region": "Île-de-France", "country": "France", "continent": "Europe", "latitude": 48.85, "longitude": 2.35 },
+      "urls": { "detail": "https://webcams.windy.com/webcams/1179853136" }
+    },
+    {
+      "webcamId": 1179853137,
+      "title": "Webcam sans position",
+      "viewCount": 3,
+      "status": "active",
+      "lastUpdatedOn": "2026-11-15T14:00:00.000Z"
+    }
+  ]
+}

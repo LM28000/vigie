@@ -1,0 +1,80 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "pvo_patrimoine_voirie.pvocameracriter.34",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.81978207,
+     45.75235833
+    ]
+   },
+   "geometry_name": "the_geom",
+   "properties": {
+    "nom": "Lyon - Perrache",
+    "libellelong": "Tunnel sous Fourvière",
+    "identifiant": 219,
+    "numeromaintenance": "CWL5801",
+    "typecamera": "Web",
+    "fournisseur": "CRITER",
+    "observation": "Direction : Lyon - Perrache",
+    "url": "https://download.data.grandlyon.com/files/rdata/pvo_patrimoine_voirie.pvocameracriter/CWL5801.JPG",
+    "gid": 34,
+    "last_update_fme": "2026-11-15T16:06:32.511+01:00",
+    "last_update": "2026-11-15T16:06:30+01:00"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "pvo_patrimoine_voirie.pvocameracriter.42",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.85958053,
+     45.74958368
+    ]
+   },
+   "geometry_name": "the_geom",
+   "properties": {
+    "nom": "Grange Blanche",
+    "libellelong": "Cours A.Thomas / Bd des Tchécoslovaques",
+    "identifiant": 220,
+    "numeromaintenance": "CWL3005",
+    "typecamera": "Web",
+    "fournisseur": "CRITER",
+    "observation": "Direction : Grange Blanche",
+    "url": "https://download.data.grandlyon.com/files/rdata/pvo_patrimoine_voirie.pvocameracriter/CWL3005.JPG",
+    "gid": 42,
+    "last_update_fme": "2026-11-15T16:06:32.511+01:00",
+    "last_update": "2026-11-15T16:06:07+01:00"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "pvo_patrimoine_voirie.pvocameracriter.40",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     4.83031718,
+     45.72673368
+    ]
+   },
+   "geometry_name": "the_geom",
+   "properties": {
+    "nom": "Porte de Gerland",
+    "libellelong": "Avenue T.Garnier / Avenue J.Jaurès",
+    "identifiant": 259,
+    "numeromaintenance": "CWL7033",
+    "typecamera": "Web",
+    "fournisseur": "CRITER",
+    "observation": "Direction : Porte de Gerland",
+    "url": "https://exemple.org/CWL0000.JPG",
+    "gid": 40,
+    "last_update_fme": "2026-11-15T16:06:32.509+01:00",
+    "last_update": "2026-11-15T16:06:00+01:00"
+   }
+  }
+ ]
+}
