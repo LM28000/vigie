@@ -30,6 +30,8 @@ struct Inner {
     bikes: RwLock<Option<Bytes>>,
     fires: RwLock<Option<Bytes>>,
     planes: RwLock<Option<Bytes>>,
+    /// Brouillage GPS estimé d'après la qualité de position des avions (voir `jamming.rs`).
+    jamming: RwLock<Option<Bytes>>,
     ships: RwLock<Option<Bytes>>,
     satellites: RwLock<Option<Bytes>>,
     starlink: RwLock<Option<Bytes>>,
@@ -61,6 +63,7 @@ impl AppState {
             bikes: RwLock::new(None),
             fires: RwLock::new(None),
             planes: RwLock::new(None),
+            jamming: RwLock::new(None),
             ships: RwLock::new(None),
             satellites: RwLock::new(None),
             starlink: RwLock::new(None),
@@ -153,6 +156,14 @@ impl AppState {
 
     pub fn set_planes(&self, body: Vec<u8>) {
         *self.0.planes.write().expect("verrou des avions") = Some(Bytes::from(body));
+    }
+
+    pub fn jamming(&self) -> Option<Bytes> {
+        self.0.jamming.read().expect("verrou du brouillage").clone()
+    }
+
+    pub fn set_jamming(&self, body: Vec<u8>) {
+        *self.0.jamming.write().expect("verrou du brouillage") = Some(Bytes::from(body));
     }
 
     pub fn ships(&self) -> Option<Bytes> {

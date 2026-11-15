@@ -81,6 +81,21 @@ export const AVION_ALT: Ramp = {
   jour: ['#aca8ff', '#918be5', '#7670c7', '#5d55a9', '#463b8d'],
   nuit: ['#aca8ff', '#918be5', '#7670c7', '#5d55a9', '#463b8d'],
 };
+/**
+ * Avions militaires et d'État : une teinte à part (sarcelle), hors de la rampe d'altitude. Contraste vérifié avec le validateur
+ * (3:1 au moins sur le fond clair et sur le fond sombre, écart avec le violet des avions de 17 à 25 en ΔE OKLab sous protanopie
+ * et deutéranopie). Toujours doublée d'un anneau : la couleur ne porte jamais seule l'information.
+ */
+export const AVION_MIL = '#0d9488';
+/**
+ * Brouillage GPS estimé (rouge brique), du plus faible au plus fort : part d'avions à la position dégradée. Une seule teinte,
+ * validée avec validate_palette.js --ordinal en jour (bout faible à 2,05:1 sur fond clair) et en nuit (bout faible à 2,3:1 sur
+ * fond sombre) : ordre monotone, écarts nets. Le jour le plus fort est le plus foncé, la nuit le plus clair.
+ */
+export const BROUILLAGE: Ramp = {
+  jour: ['#f09e8a', '#de7863', '#c4503f', '#9d3329', '#6b1c1a'],
+  nuit: ['#8c3a31', '#ad4a3c', '#cf6551', '#e98b77', '#fcc3b5'],
+};
 /** Population (terre de Sienne) : de la densité la plus faible à la plus forte. Le jour le plus dense est le plus foncé, la nuit le plus clair. */
 export const POP: Ramp = {
   jour: ['#d8ac6c', '#c58b49', '#aa6c33', '#865027', '#63381d', '#432414', '#2a160c'],

@@ -24,6 +24,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
+use crate::jamming;
 use crate::state::AppState;
 
 const BASE_URL: &str = "https://api.adsb.lol/v2/point";
@@ -45,12 +46,17 @@ const RETRY_AFTER_MAX: Duration = Duration::from_secs(19);
 const STRETCH_GROWTH: f64 = 1.25;
 const STRETCH_DECAY: f64 = 0.98;
 const MAX_STRETCH: f64 = 2.0;
+/// Le brouillage GPS est recalculé et publié une fois par minute (la fenêtre dure 20 min : plus souvent ne changerait rien).
+const JAMMING_PUBLISH_EVERY: Duration = Duration::from_secs(60);
 /// Un cercle sans réponse depuis plus de cela n'est plus fusionné : ses avions disparaissent de la carte.
 const STALE_CIRCLE: Duration = Duration::from_secs(40);
 /// Zone gardée (sud, ouest, nord, est) : France métropolitaine, Corse et abords proches.
 const AREA: (f64, f64, f64, f64) = (41.0, -6.0, 51.8, 10.2);
 /// Une position plus vieille que cela (secondes) n'est plus fiable : l'avion est perdu de vue.
 const MAX_POSITION_AGE_S: f64 = 60.0;
+
+/// Bit de `dbFlags` des appareils militaires (readsb : 1 militaire, 2 intéressant, 4 PIA, 8 LADD).
+const DB_MILITARY: u32 = 1;
 
 /// Altitude barométrique : un nombre de pieds, ou le texte « ground » au sol.
 #[derive(Deserialize)]
@@ -79,6 +85,22 @@ struct RawAircraft {
     lat: Option<f64>,
     lon: Option<f64>,
     seen_pos: Option<f64>,
+    /// Drapeaux de la base d'appareils (readsb) : bit 0 militaire, bit 1 « intéressant », bit 2 PIA (adresse ICAO privée),
+    /// bit 3 LADD (liste de demandes de confidentialité). Absent quand aucun n'est levé.
+    #[serde(rename = "dbFlags")]
+    db_flags: Option<u32>,
+    /// Qualité de position annoncée (voir `jamming.rs`) : NIC, NACp, version du transpondeur.
+    nic: Option<f64>,
+    nac_p: Option<f64>,
+    version: Option<f64>,
+    /// Origine de la position : `adsb_icao`, `adsr_icao`, `mlat`, `tisb_*`… Les listes `mlat` et `tisb` nomment les champs
+    /// calculés ou relayés, quand il y en a.
+    #[serde(rename = "type")]
+    source_type: Option<String>,
+    #[serde(default)]
+    mlat: Vec<String>,
+    #[serde(default)]
+    tisb: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -127,8 +149,14 @@ struct PlaneOut {
     #[serde(skip_serializing_if = "Option::is_none")]
     emergency: Option<String>,
     ground: bool,
+    /// Appareil militaire d'après la base d'appareils (drapeau `dbFlags` bit 0). Absent (faux) pour les autres.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    military: bool,
     /// Âge de la position au moment de la collecte, en secondes.
     seen_pos: f64,
+    /// Position dégradée selon `jamming::degraded` (`None` : ne compte pas). Sert au brouillage GPS, jamais envoyé.
+    #[serde(skip)]
+    gps_degraded: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -216,6 +244,10 @@ pub async fn poll_forever(http: reqwest::Client, state: AppState) {
     let mut refusals = 0u32;
     // Tant qu'adsb.lol demande une pause, les cercles viennent d'adsb.fi.
     let mut lol_paused_until: Option<Instant> = None;
+    // Brouillage GPS : les relevés de qualité de position, alimentés par les mêmes réponses (aucune requête de plus).
+    let began = Instant::now();
+    let mut grid = jamming::Grid::default();
+    let mut jamming_published: Option<Instant> = None;
     loop {
         let started = Instant::now();
         let mut retry_after = None;
@@ -238,6 +270,12 @@ pub async fn poll_forever(http: reqwest::Client, state: AppState) {
         };
         match result {
             Ok(planes) => {
+                let now_s = began.elapsed().as_secs() as u32;
+                for plane in &planes {
+                    if let (Some(degraded), Ok(hex)) = (plane.gps_degraded, u32::from_str_radix(&plane.hex, 16)) {
+                        grid.observe(hex, plane.lon, plane.lat, degraded, now_s);
+                    }
+                }
                 snapshots[next] = Some(Snapshot { planes, answered: Instant::now() });
                 next = (next + 1) % CIRCLES.len();
                 pacer.success();
@@ -260,6 +298,15 @@ pub async fn poll_forever(http: reqwest::Client, state: AppState) {
                 }
                 Err(error) => warn!("avions : publication impossible : {error:#}"),
             }
+        }
+        if snapshots.iter().any(Option::is_some) && jamming_published.is_none_or(|at| at.elapsed() >= JAMMING_PUBLISH_EVERY) {
+            let now_s = began.elapsed().as_secs() as u32;
+            grid.prune(now_s);
+            match grid.response(now_s, now_s, Timestamp::now().as_second()) {
+                Ok(body) => state.set_jamming(body),
+                Err(error) => warn!("brouillage GPS : publication impossible : {error:#}"),
+            }
+            jamming_published = Some(Instant::now());
         }
         tokio::time::sleep(pacer.wait(started.elapsed(), retry_after)).await;
     }
@@ -362,6 +409,8 @@ fn parse(json: &str) -> Result<Vec<PlaneOut>> {
         if seen_pos > MAX_POSITION_AGE_S || a.hex.starts_with('~') {
             continue;
         }
+        // Une position MLAT ou TIS-B n'a pas de qualité GPS à juger (voir `jamming.rs`).
+        let positioned_by_adsb = a.mlat.is_empty() && a.tisb.is_empty() && a.source_type.as_deref().is_none_or(|t| t.starts_with("adsb") || t.starts_with("adsr"));
         let (alt_baro, ground) = match a.alt_baro {
             Some(BaroAltitude::Feet(feet)) => (Some(feet), false),
             Some(BaroAltitude::Text(text)) => (None, text == "ground"),
@@ -383,7 +432,9 @@ fn parse(json: &str) -> Result<Vec<PlaneOut>> {
             squawk: clean(a.squawk),
             emergency: clean(a.emergency).filter(|e| e != "none"),
             ground,
+            military: a.db_flags.is_some_and(|flags| flags & DB_MILITARY != 0),
             seen_pos,
+            gps_degraded: jamming::degraded(a.nic, a.nac_p, a.version, ground, positioned_by_adsb),
         });
     }
     Ok(planes)
@@ -423,6 +474,46 @@ mod tests {
         assert!(ground.callsign.is_none());
     }
 
+    /// Champs de qualité tels qu'adsb.fi et adsb.lol les envoient (relevé du 15 novembre 2026 autour de Paris : version 2,
+    /// NIC 8 ou 9, NACp 8 à 11, listes `mlat` et `tisb` vides), complétés de cas qu'une réponse ne contient pas toujours :
+    /// appareil militaire, position brouillée, MLAT, transpondeur de version 1.
+    const QUALITY: &str = r#"{"aircraft":[
+      {"hex":"4d214f","type":"adsb_icao","flight":"AJD214K ","t":"C68A","alt_baro":8300,"dbFlags":8,"nic":9,"nac_p":10,"version":2,"lat":48.9,"lon":2.4,"seen_pos":1.0,"mlat":[],"tisb":[]},
+      {"hex":"3b7a01","type":"adsb_icao","flight":"CTM2001","t":"A400","alt_baro":12000,"dbFlags":1,"nic":8,"nac_p":9,"version":2,"lat":48.8,"lon":2.3,"seen_pos":2.0,"mlat":[],"tisb":[]},
+      {"hex":"3b7a02","type":"adsb_icao","dbFlags":3,"alt_baro":9000,"nic":0,"nac_p":0,"version":2,"lat":48.7,"lon":2.2,"seen_pos":2.0},
+      {"hex":"3944ea","type":"adsb_icao","alt_baro":30000,"nic":6,"nac_p":9,"version":2,"lat":47.0,"lon":3.0,"seen_pos":1.0,"mlat":[],"tisb":[]},
+      {"hex":"3944eb","type":"mlat","alt_baro":30000,"nic":0,"nac_p":0,"lat":47.0,"lon":3.0,"seen_pos":1.0,"mlat":["lat","lon"],"tisb":[]},
+      {"hex":"3944ec","type":"adsb_icao","alt_baro":30000,"nic":0,"nac_p":0,"version":1,"lat":47.0,"lon":3.0,"seen_pos":1.0},
+      {"hex":"3944ed","type":"adsb_icao","alt_baro":"ground","nic":0,"nac_p":0,"version":2,"lat":47.0,"lon":3.0,"seen_pos":1.0},
+      {"hex":"3944ee","type":"adsb_icao","alt_baro":20000,"lat":47.0,"lon":3.0,"seen_pos":1.0}]}"#;
+
+    #[test]
+    fn decode_les_drapeaux_de_la_base_d_appareils() {
+        let planes = parse(QUALITY).unwrap();
+        let military = |hex: &str| planes.iter().find(|p| p.hex == hex).unwrap().military;
+        assert!(!military("4d214f"), "dbFlags 8 (LADD) : pas militaire");
+        assert!(military("3b7a01"), "dbFlags 1 : militaire");
+        assert!(military("3b7a02"), "dbFlags 3 (militaire et intéressant) : militaire");
+        assert!(!military("3944ee"), "sans dbFlags : pas militaire");
+        // Le booléen n'est écrit que quand il est vrai, pour garder la réponse compacte.
+        let json = |hex: &str| serde_json::to_string(planes.iter().find(|p| p.hex == hex).unwrap()).unwrap();
+        assert!(json("3b7a01").contains("\"military\":true"));
+        assert!(!json("4d214f").contains("military") && !json("4d214f").contains("gps"));
+    }
+
+    #[test]
+    fn juge_la_qualite_de_position_de_chaque_avion() {
+        let planes = parse(QUALITY).unwrap();
+        let degraded = |hex: &str| planes.iter().find(|p| p.hex == hex).unwrap().gps_degraded;
+        assert_eq!(degraded("4d214f"), Some(false), "NIC 9, NACp 10");
+        assert_eq!(degraded("3b7a02"), Some(true), "NIC 0, NACp 0");
+        assert_eq!(degraded("3944ea"), Some(true), "NIC 6");
+        assert_eq!(degraded("3944eb"), None, "MLAT");
+        assert_eq!(degraded("3944ec"), None, "transpondeur de version 1");
+        assert_eq!(degraded("3944ed"), None, "au sol");
+        assert_eq!(degraded("3944ee"), None, "aucun indicateur");
+    }
+
     #[test]
     fn ecarte_les_positions_perimees() {
         let json = r#"{"ac":[{"hex":"abc123","lat":47.0,"lon":2.0,"seen_pos":75.0,"alt_baro":3000}]}"#;
@@ -446,7 +537,9 @@ mod tests {
             squawk: None,
             emergency: None,
             ground: false,
+            military: false,
             seen_pos,
+            gps_degraded: None,
         }
     }
 

@@ -4,7 +4,8 @@
 //! - `GET /api/velos` : stations de vélos en libre-service de France, avec vélos et places disponibles.
 //! - `GET /api/feux` : feux détectés par satellite sur 7 jours.
 //! - `GET /api/bateaux` : navires autour de la France (AIS, aisstream.io), toutes les 10 s.
-//! - `GET /api/avions` : avions en vol au-dessus de la France (adsb.lol), mis à jour toutes les 10 s.
+//! - `GET /api/avions` : avions en vol au-dessus de la France (adsb.lol), mis à jour toutes les 10 s ; chaque avion dit s'il est militaire (`military`).
+//! - `GET /api/brouillage` : brouillage GPS estimé (part d'avions à la position dégradée par case de 0,5°, sur 20 min), recalculé chaque minute.
 //! - `GET /api/satellites` : éléments orbitaux CelesTrak (stations, GPS, Galileo, météo, brillants) ;
 //!   `GET /api/satellites/starlink` : ceux de la constellation Starlink, à part car volumineux.
 //! - `GET /api/vent` : champ de vent à 10 m sur la France (Open-Meteo, ARPEGE), pour l'heure actuelle et les suivantes.
@@ -71,6 +72,7 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/velos", get(|State(state): State<AppState>| async move { prepared(state.bikes(), "vélos") }))
         .route("/api/feux", get(|State(state): State<AppState>| async move { prepared(state.fires(), "feux") }))
         .route("/api/avions", get(|State(state): State<AppState>| async move { prepared(state.planes(), "avions") }))
+        .route("/api/brouillage", get(|State(state): State<AppState>| async move { prepared(state.jamming(), "brouillage GPS") }))
         .route("/api/transports", get(|State(state): State<AppState>| async move { prepared(state.transit(), "transports") }))
         .route("/api/bateaux", get(|State(state): State<AppState>| async move { prepared(state.ships(), "bateaux") }))
         .route("/api/satellites", get(|State(state): State<AppState>| async move { prepared(state.satellites(), "satellites") }))
