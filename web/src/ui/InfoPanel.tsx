@@ -5,6 +5,7 @@ import { shareUrl } from '../core/shareState';
 import { useSelectionInfo } from './hooks';
 import { Icon } from './icons';
 import { InfoChartView } from './InfoChart';
+import { InfoImageView } from './InfoImage';
 
 type SelectionInfo = NonNullable<ReturnType<ModuleManager['describeSelection']>>;
 
@@ -41,6 +42,7 @@ export function InfoBody({ manager, selection, info }: { manager: ModuleManager;
         </button>
       </header>
       {content.status && <StatusBadge status={content.status} />}
+      {content.image && <InfoImageView key={content.image.src} image={content.image} />}
       {figures.length > 0 && (
         <dl className="figures">
           {figures.map((figure) => (

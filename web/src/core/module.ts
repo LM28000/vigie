@@ -152,6 +152,27 @@ export interface InfoContent {
   actions?: InfoAction[];
   /** Courbe sous les chiffres clés (niveau de la mer sur 48 h, par exemple). */
   chart?: InfoChart;
+  /** Image en direct (webcam), sous le statut. */
+  image?: InfoImage;
+}
+
+/**
+ * Image d'une fiche (webcam). Elle est montrée à sa taille native au plus (jamais agrandie, réduite à la
+ * largeur de la fiche si besoin), et rechargée toute seule tant que la fiche est ouverte.
+ */
+export interface InfoImage {
+  /** Adresse de l'image ; le rechargement y ajoute un paramètre `_` qui change à chaque fois. */
+  src: string;
+  /** Texte alternatif : ce que montre la caméra. */
+  alt: string;
+  /** Heure de l'image (ms depuis 1970) quand la source la donne ; sinon la fiche affiche l'heure du dernier chargement. */
+  time?: number;
+  /** Intervalle de rechargement de l'image (ms) ; absent : l'image n'est pas rechargée. */
+  refreshMs?: number;
+  /** Page vers laquelle l'image renvoie au clic (obligatoire pour Windy). */
+  href?: string;
+  /** Mention sous l'image (« Image : Windy Webcams »). */
+  credit?: string;
 }
 
 /** Courbe de la fiche : des mesures, un prolongement estimé en pointillés, un repère « maintenant » et des repères nommés. */

@@ -1,0 +1,20 @@
+{
+  "webcamId": 1179853135,
+  "title": "Lyon: Place Bellecour",
+  "viewCount": 128261,
+  "status": "active",
+  "lastUpdatedOn": "2026-11-15T14:52:10.000Z",
+  "images": {
+    "current": {
+      "icon": "https://imgproxy.windy.com/_/icon/plain/current/1179853135/original.jpg?token=exemple-factice",
+      "thumbnail": "https://imgproxy.windy.com/_/thumbnail/plain/current/1179853135/original.jpg?token=exemple-factice",
+      "preview": "https://imgproxy.windy.com/_/preview/plain/current/1179853135/original.jpg?token=exemple-factice"
+    },
+    "sizes": {
+      "icon": { "width": 48, "height": 48 },
+      "thumbnail": { "width": 200, "height": 112 },
+      "preview": { "width": 400, "height": 224 }
+    },
+    "daylight": {}
+  }
+}

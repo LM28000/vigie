@@ -43,6 +43,9 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 | Géocodage des adresses | IGN, Géoplateforme (`data.geopf.fr/geocodage`), sans clé | Licence Etalab 2.0 |
 | Vigilance météo | Météo-France via data.gouv.fr, contours IGN Admin Express | Licence Ouverte 2.0 |
 | Trafic routier | Bison Futé via transport.data.gouv.fr ; Rennes Métropole | Licence Ouverte 2.0 ; ODbL |
+| Caméras de vidéoprotection | OpenStreetMap, objets `man_made=surveillance` (extraction hebdomadaire par l'API [Overpass](https://overpass-api.de), France métropolitaine) | ODbL : « © contributeurs OpenStreetMap », partage à l'identique des bases dérivées |
+| Webcams (Windy) | [Windy Webcams API v3](https://api.windy.com/webcams/docs), clé personnelle `WINDY_WEBCAMS_KEY` (gratuite, côté serveur seulement) | [Conditions de l'API](https://api.windy.com/webcams/terms) : images aux tailles fournies ou plus petites (jamais agrandies), image liée à la page de la webcam, mention de Windy visible, lien d'image valable 10 minutes (niveau gratuit) : jamais gardé plus de 8 minutes ; usage raisonnable de l'API |
+| Caméras de trafic (Lyon) | Métropole de Lyon, « Caméras web Criter » (data.gouv.fr, WFS de data.grandlyon.com ; images `download.data.grandlyon.com`) | Licence Ouverte 2.0, mention « Métropole de Lyon, Criter » |
 | Bornes de recharge | Base nationale des IRVE (transport.data.gouv.fr) | Licence Ouverte 2.0 |
 | Bus, trams et métros | réseaux de transport via transport.data.gouv.fr (GTFS-RT) | Licence Ouverte 2.0 ou ODbL selon le réseau (la licence de chaque réseau est affichée dans l'app) |
 | Île-de-France | Île-de-France Mobilités, plateforme PRIM (GTFS et SIRI), clé personnelle ; quota de 1 000 requêtes par jour | ODbL |
@@ -64,5 +67,8 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 - **NASA FIRMS** : libre, citer la NASA ; **EMSC** : citer l'EMSC.
 - **Atmo France / AASQA** : données ouvertes via Atmo Data (compte requis), à citer « Atmo France / AASQA ».
 - **Mapterhorn** : relief, attribution ([mapterhorn.com/attribution](https://mapterhorn.com/attribution)).
+- **Caméras de vidéoprotection (OpenStreetMap)** : ODbL, attribution OpenStreetMap ; les données sont saisies par des contributeurs, sans garantie (position, direction, exploitant). Le cône de vision est une indication de la carte (60°, 35 m par défaut), pas une donnée d'OpenStreetMap.
+- **Windy Webcams** : seules les petites tailles d'image, jamais agrandies ; l'image renvoie vers la page de la webcam (`urls.detail`) et la mention de Windy est visible ; aucun lien d'image n'est gardé plus de 8 minutes (ils expirent à 10 minutes) ; le serveur limite ses requêtes (catalogue toutes les 12 h, au plus 40 liens d'image par minute) ; la clé reste sur le serveur. Les webcams sont publiées volontairement par leurs propriétaires : **aucune source de caméras privées non sécurisées** (Insecam et assimilés) n'est utilisée ni ne doit l'être.
+- **Criter (Métropole de Lyon)** : Licence Ouverte 2.0 ; 15 caméras de circulation, image renouvelée chaque minute.
 
 Les positions d'avions et de navires proviennent de récepteurs communautaires publics.

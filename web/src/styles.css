@@ -947,6 +947,47 @@ p {
   font-size: 12px;
 }
 
+/* Image d'une webcam : jamais agrandie (pas de width: 100 %), réduite à la largeur de la fiche si elle est plus grande. */
+.info__image {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.info__image a {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.info__image-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: var(--ui-control);
+}
+
+.info__image-wait {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  border-radius: var(--radius-md);
+  background: var(--ui-control);
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.info__image-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  color: var(--ui-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .info__table > .kicker {
   margin-bottom: var(--space-3);
 }
