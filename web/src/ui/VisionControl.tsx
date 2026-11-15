@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { IControl } from 'maplibre-gl';
 import type { ModuleManager } from '../core/moduleManager';
+import { currentNight } from '../map/baseMap';
 import { VISION_LABELS, VISION_MODES, type VisionMode, useVision, vision } from '../core/vision';
 import { useMap } from './ZoneTool';
 import './vision.css';
@@ -38,15 +39,16 @@ const THERMAL_STOPS: ReadonlyArray<readonly [number, number, number, number]> = 
   [1, 1, 1, 1],
 ];
 /** Les surfaces claires du fond de jour tomberaient toutes dans le jaune : la luminance est redressée avant la palette. */
-const THERMAL_BLACK = 0.4;
-const THERMAL_GAMMA = 2.4;
+const THERMAL_DAY = { black: 0.4, white: 1, gamma: 2.4 };
+/** La carte de nuit est sombre (luminance de 0,04 à 0,35) : la même palette, étirée sur cette plage. */
+const THERMAL_NIGHT = { black: 0.03, white: 0.4, gamma: 1.1 };
 const TABLE_SIZE = 33;
 
 /** `tableValues` d'un canal de la palette (0 = rouge, 1 = vert, 2 = bleu), échantillonnée régulièrement. */
-function thermalTable(channel: 0 | 1 | 2): string {
+function thermalTable(channel: 0 | 1 | 2, { black, white, gamma }: { black: number; white: number; gamma: number }): string {
   const values: string[] = [];
   for (let i = 0; i < TABLE_SIZE; i++) {
-    const luminance = Math.min(1, Math.max(0, (i / (TABLE_SIZE - 1) - THERMAL_BLACK) / (1 - THERMAL_BLACK))) ** THERMAL_GAMMA;
+    const luminance = Math.min(1, Math.max(0, (i / (TABLE_SIZE - 1) - black) / (white - black))) ** gamma;
     let k = THERMAL_STOPS.findIndex(([stop]) => stop >= luminance);
     if (k < 1) k = 1;
     const [t0, ...c0] = THERMAL_STOPS[k - 1]!;
@@ -62,7 +64,14 @@ const LUMA = '0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 
 
 /** Les filtres SVG (`filter: url(#vision-…)` dans vision.css) : définis une fois, sans rien afficher. */
 function VisionFilters() {
-  const [red, green, blue] = useMemo(() => [thermalTable(0), thermalTable(1), thermalTable(2)], []);
+  const palettes = useMemo(
+    () =>
+      [
+        ['vision-thermique', THERMAL_DAY],
+        ['vision-thermique-nuit', THERMAL_NIGHT],
+      ] as const,
+    [],
+  );
   return (
     <svg className="vision-defs" width="0" height="0" aria-hidden="true" focusable="false">
       <defs>
@@ -76,15 +85,17 @@ function VisionFilters() {
           </feComponentTransfer>
         </filter>
 
-        {/* Thermique : luminance puis palette par canal (tables ci-dessus). */}
-        <filter id="vision-thermique" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-          <feColorMatrix type="matrix" values={LUMA} />
-          <feComponentTransfer>
-            <feFuncR type="table" tableValues={red} />
-            <feFuncG type="table" tableValues={green} />
-            <feFuncB type="table" tableValues={blue} />
-          </feComponentTransfer>
-        </filter>
+        {/* Thermique : luminance puis palette par canal (tables ci-dessus), une version pour le fond de jour et une pour la nuit. */}
+        {palettes.map(([id, range]) => (
+          <filter key={id} id={id} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+            <feColorMatrix type="matrix" values={LUMA} />
+            <feComponentTransfer>
+              <feFuncR type="table" tableValues={thermalTable(0, range)} />
+              <feFuncG type="table" tableValues={thermalTable(1, range)} />
+              <feFuncB type="table" tableValues={thermalTable(2, range)} />
+            </feComponentTransfer>
+          </filter>
+        ))}
 
         {/* Écran cathodique : rouge et bleu décalés de part et d'autre du vert (aberration chromatique), teinte ambrée discrète. */}
         <filter id="vision-cathodique" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
@@ -182,10 +193,12 @@ function VisionMenu({ host }: { host: HTMLElement }) {
     const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 0;
     if (step === 0) return;
     event.preventDefault();
-    const i = VISION_MODES.indexOf(mode);
-    const next = VISION_MODES[(i + step + VISION_MODES.length) % VISION_MODES.length]!;
-    choose(next);
-    requestAnimationFrame(() => rootRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus());
+    // On part du choix qui a le focus (et non du mode : deux flèches de suite arrivent avant le rendu suivant).
+    const radios = [...(rootRef.current?.querySelectorAll<HTMLElement>('[role="radio"]') ?? [])];
+    const from = radios.indexOf(document.activeElement as HTMLElement);
+    const i = (from < 0 ? VISION_MODES.indexOf(mode) : from + step + VISION_MODES.length) % VISION_MODES.length;
+    radios[i]?.focus();
+    choose(VISION_MODES[i]!);
   };
 
   return createPortal(
@@ -240,6 +253,21 @@ export function VisionControl({ manager }: { manager: ModuleManager }) {
   const map = useMap(manager);
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [canvasContainer, setCanvasContainer] = useState<HTMLElement | null>(null);
+
+  // Le fond de carte de nuit est bien plus sombre : le thermique choisit sa palette d'après `data-nuit` (vision.css).
+  useEffect(() => {
+    const refresh = () => {
+      const night = vision.getSnapshot() !== 'normal' && currentNight() > 0.5;
+      if (night) document.documentElement.dataset.nuit = '';
+      else delete document.documentElement.dataset.nuit;
+    };
+    refresh();
+    const timer = setInterval(refresh, 500);
+    return () => {
+      clearInterval(timer);
+      delete document.documentElement.dataset.nuit;
+    };
+  }, []);
 
   useEffect(() => {
     if (!map) return;

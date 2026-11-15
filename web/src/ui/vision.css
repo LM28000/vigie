@@ -27,6 +27,10 @@ html[data-vision='thermique'] .maplibregl-canvas {
   filter: url(#vision-thermique);
 }
 
+html[data-vision='thermique'][data-nuit] .maplibregl-canvas {
+  filter: url(#vision-thermique-nuit);
+}
+
 html[data-vision='cathodique'] .maplibregl-canvas {
   filter: url(#vision-cathodique);
 }

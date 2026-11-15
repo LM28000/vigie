@@ -209,6 +209,7 @@ export function startSharedStateSync(manager: ModuleManager): () => void {
   };
   const unsubscribeManager = manager.subscribe(schedule);
   const unsubscribeClock = clock.subscribe(schedule);
+  const unsubscribeVision = vision.subscribe(schedule);
   // Un rejeu en lecture avance sans que rien ne change : on rafraîchit l'instant de temps en temps.
   const replayTimer = setInterval(() => {
     const { live, playing } = clock.getState();
@@ -222,6 +223,7 @@ export function startSharedStateSync(manager: ModuleManager): () => void {
     clearInterval(replayTimer);
     unsubscribeManager();
     unsubscribeClock();
+    unsubscribeVision();
     window.removeEventListener('pagehide', flush);
   };
 }

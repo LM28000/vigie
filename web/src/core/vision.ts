@@ -14,7 +14,7 @@ export type VisionMode = (typeof VISION_MODES)[number];
 export const VISION_LABELS: Readonly<Record<VisionMode, { label: string; hint: string }>> = {
   normal: { label: 'Normal', hint: 'La carte telle quelle' },
   nocturne: { label: 'Vision nocturne', hint: 'Vert phosphore, grain' },
-  thermique: { label: 'Thermique', hint: 'Fausses couleurs, du noir au blanc' },
+  thermique: { label: 'Thermique', hint: 'Fausses couleurs, chaud en clair' },
   cathodique: { label: 'Écran cathodique', hint: 'Lignes de balayage, ambre' },
 };
 
