@@ -4,7 +4,7 @@ La source de vérité de l'apparence de Vigie : règles de marque, jetons, compo
 
 | Fichier | Contenu |
 |---|---|
-| [`tokens.json`](tokens.json) | Tous les jetons : 89 couleurs (thèmes `jour` et `nuit` de la carte), typographie, espacements, rayons, ombre |
+| [`tokens.json`](tokens.json) | Tous les jetons : 95 couleurs (thèmes `jour` et `nuit` de la carte), typographie, espacements, rayons, ombre |
 | [`tokens.css`](tokens.css) | Les mêmes, en propriétés CSS (`--ui-ink`, `--space-4`…) et classes de styles de texte. Les fichiers de police viennent des paquets `@fontsource` du site. |
 | [`composants/`](composants) | Guides des composants (Pastille, Bouton, Fiche, Réglage, Légende) et un aperçu HTML de chacun, à ouvrir avec `tokens.css` |
 | [`logos/`](logos) | Le logo, sur tuile et sans fond |
@@ -44,10 +44,10 @@ Vigie montre la France en direct : trains, avions, bateaux, météo, territoire,
 ### Données
 
 - **Teintes catégorielles** (une couleur par catégorie) : trains `train-ter`, `train-gv`, `train-ic` ; transports `transit-bus`, `transit-tram`, `transit-metro` ; bateaux `ship-*` ; familles politiques `elec-*`. Toujours accompagnées d'une légende, et du nom dans la fiche.
-- **Rampes séquentielles** (une seule teinte, du clair au foncé le jour) : `avion-alt-*`, `pop-*`, `iso-*`, `couv-*`, `pluie-*`, `accident-*`, `participation-*`.
+- **Rampes séquentielles** (une seule teinte, du clair au foncé le jour) : `avion-alt-*`, `brouillage-*`, `pop-*`, `iso-*`, `couv-*`, `pluie-*`, `accident-*`, `participation-*`.
 - **Rampe divergente :** `immo-*`, deux teintes et un gris central (`immo-4`) pour la médiane de référence.
 - **Statuts réservés aux états** (`status-vert`, `status-jaune`, `status-orange`, `status-rouge`) : crues, vigilance, trafic. Jamais pour une catégorie ou une grandeur, toujours avec un mot ou un motif (jaune et orange sont proches).
-- **Toute nouvelle palette** passe le validateur de palettes en jour et en nuit, et ne reprend pas une teinte déjà prise dans la même scène. Teintes déjà prises : bleu (TER, participation, pluie, marine), orange (grande vitesse), vert (Intercités), violet (avions), framboise (isochrones), Sienne (population), ocre (accidents), olive (couverture), bleu-gris-rose (immobilier).
+- **Toute nouvelle palette** passe le validateur de palettes en jour et en nuit, et ne reprend pas une teinte déjà prise dans la même scène. Teintes déjà prises : bleu (TER, participation, pluie, marine), orange (grande vitesse), vert (Intercités), violet (avions), sarcelle (avions militaires), rouge brique (brouillage GPS), framboise (isochrones), Sienne (population), ocre (accidents), olive (couverture), bleu-gris-rose (immobilier).
 
 ## Typographie
 

@@ -31,6 +31,7 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 | Feux | NASA FIRMS (capteurs VIIRS) | libre, citer la NASA |
 | Qualité de l'air | Atmo France / AASQA, via Atmo Data (compte requis) | données ouvertes, citer « Atmo France / AASQA » |
 | Avions | adsb.lol (récepteurs ADS-B de la communauté) ; adsb.fi en secours quand adsb.lol demande de ralentir | ODbL ; adsb.fi : usage personnel non commercial |
+| Brouillage GPS | qualité de position (NIC, NACp) lue dans les réponses d'adsb.lol et d'adsb.fi, agrégée par Vigie ; méthode de gpsjam.org | mêmes conditions que les avions ; estimation, pas une mesure |
 | Bateaux | aisstream.io (récepteurs AIS de la communauté) | gratuit, clé personnelle à garder sur le serveur |
 | Population | INSEE, Filosofi 2019, revenus, pauvreté et niveau de vie, données carroyées de 200 m | licence ouverte Etalab 2.0, citer « INSEE, Filosofi 2019 » |
 | Couverture mobile | ARCEP, Mon réseau mobile, cartes de couverture théorique 2026 T2 (data.arcep.fr) ; contours des départements Etalab / IGN Admin Express (masque de terre) | Licence Ouverte, citer « ARCEP, Mon réseau mobile » |

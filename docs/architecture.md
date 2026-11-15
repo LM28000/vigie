@@ -56,7 +56,8 @@ flowchart LR
 | `multimodal.rs`, `multimodal/` | Cars et transports d'Île-de-France ajoutés aux isochrones : lecture en flux des GTFS (`feed.rs`), `idfm.rs`, `regional.rs`, chargement de fond (`load.rs`). |
 | `transit.rs`, `estimates.rs`, `gtfs_compact.rs` | Bus, trams et métros en direct (GTFS-RT) et positions estimées d'après les horaires. |
 | `idf.rs`, `idf/` | Île-de-France : SIRI global de PRIM rapproché du GTFS d'IDFM. |
-| `planes.rs`, `ships.rs`, `satellites.rs` | Avions (adsb.lol), navires (aisstream, WebSocket), éléments orbitaux (CelesTrak). |
+| `planes.rs`, `ships.rs`, `satellites.rs` | Avions (adsb.lol, drapeau militaire compris), navires (aisstream, WebSocket), éléments orbitaux (CelesTrak). |
+| `jamming.rs` | Brouillage GPS estimé : grille de 0,5° sur 20 min, alimentée par les réponses des avions. |
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
@@ -65,7 +66,7 @@ flowchart LR
 | `history/` | Enregistrement et relecture : voir [historique-et-relecture.md](historique-et-relecture.md). |
 | `state.rs`, `api.rs`, `main.rs` | État partagé, routes HTTP, démarrage et réglages (voir [deploiement.md](deploiement.md)). |
 
-Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
+Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
 
 ## Le site (`web/src/`)
 

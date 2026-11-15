@@ -2,6 +2,11 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 15 novembre 2026 — Avions militaires, brouillage GPS
+
+- **Avions militaires et d'État** : le drapeau `dbFlags` (bit 0) des réponses d'adsb.lol et d'adsb.fi est exposé (`military`), sans requête de plus. Silhouette et anneau sarcelle, mention dans la fiche, légende, réglage « Afficher : tous / militaires seulement ».
+- **Brouillage GPS** : nouvelle couche (Ciel et espace), `GET /api/brouillage`. Grille de 0,5° sur 20 min des avions à la position dégradée (NIC < 7 ou NACp < 8, hors MLAT et TIS-B), couleur d'une seule teinte validée, cases grises quand il y a moins de 5 avions, fiche par case qui rappelle que c'est une estimation indirecte ([docs/couches.md](docs/couches.md#brouillage-gps--lecture-et-limites)).
+
 ## 14 novembre 2026 — Relief plus fin, avions sans refus
 
 - **Relief Mapterhorn** : `maxzoom` relevé de 12 à 16 (tuiles de 0,8 m par pixel en France issues du LiDAR) ; le relief « LiDAR HD » en 3D devient un réglage éteint par défaut, son altitude étant la même jusqu'au zoom 16 ([docs/rendu-3d.md](docs/rendu-3d.md)).

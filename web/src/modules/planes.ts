@@ -22,7 +22,7 @@
  * garde donc son altitude). Pas d'extrapolation : le passé se lit entre deux mesures connues. Là où rien n'a
  * été enregistré, la couche se masque et dit pourquoi.
  */
-import { AVION_ALT } from '../design/tokens';
+import { AVION_ALT, AVION_MIL } from '../design/tokens';
 import type { Color } from '@deck.gl/core';
 import { IconLayer, LineLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { defineModule, type InfoContent, type InfoFigure, type LegendItem } from '../core/module';
@@ -73,6 +73,8 @@ interface ApiPlane {
   squawk?: string;
   emergency?: string;
   ground: boolean;
+  /** Appareil militaire ou d'État (drapeau de la base d'appareils) ; absent quand ce n'est pas le cas. */
+  military?: boolean;
   seenPos: number;
 }
 
@@ -95,6 +97,8 @@ export interface Plane {
   squawk?: string;
   emergency?: string;
   ground: boolean;
+  /** Appareil militaire ou d'État. Inconnu en relecture (l'enregistrement ne le garde pas) : faux. */
+  military: boolean;
   /** Silhouette, d'après le type OACI (ou la catégorie ADS-B à défaut). */
   cls: PlaneClass;
   band: Band;
@@ -174,6 +178,8 @@ const SHADOW_REFRESH_MS = 2_000;
  */
 const BAND_COLORS = AVION_ALT.jour;
 const GROUND_COLOR = '#cfcdc6';
+/** Appareils militaires et d'État : une teinte fixe, quelle que soit l'altitude (jeton `avion-mil`). */
+const MIL_COLOR = AVION_MIL;
 const BAND_LABELS = ['Moins de 1 000 m', '1 000 à 3 000 m', '3 000 à 6 000 m', '6 000 à 9 000 m', '9 000 m et plus'] as const;
 const ALERT_COLOR: Color = [229, 72, 77];
 const ALERT_CSS = '#e5484d';
@@ -183,6 +189,8 @@ const INK: Color = [20, 26, 38, 235];
 const METERS_PER_PIXEL_ZOOM0 = 78_271.517;
 /** Rayon des anneaux d'état, en fraction de l'envergure affichée. */
 const RING_RADIUS = 0.72;
+/** L'anneau des militaires est plus large que celui des urgences : un avion à la fois militaire et en urgence porte les deux. */
+const MILITARY_RING_GROWTH = 1.3;
 
 /** « #rrggbb » → couleur deck.gl. */
 function hexColor(hex: string): Color {
@@ -197,11 +205,31 @@ const EMERGENCY_SQUAWKS: Record<string, string> = {
 };
 const EMERGENCY_STATES = new Set(['general', 'nordo', 'unlawful', 'downed']);
 
+/** Réglage « Afficher » : tous les avions, ou seulement les appareils militaires et d'État (en direct : l'enregistrement ne les distingue pas). */
+const SHOW_SETTING = {
+  id: 'afficher',
+  label: 'Afficher',
+  options: [
+    { value: 'tous', label: 'Tous les avions' },
+    { value: 'militaires', label: 'Militaires seulement' },
+  ],
+  defaultValue: 'tous',
+} as const;
+
+/**
+ * Vrai si la carte ne doit montrer que les appareils militaires. En relecture le réglage est sans effet : l'enregistrement du
+ * serveur ne garde pas le drapeau militaire, et la carte serait vide.
+ */
+function militaryOnly(settings: Readonly<Record<string, string>>, data: PlanesData | undefined): boolean {
+  return (settings[SHOW_SETTING.id] ?? SHOW_SETTING.defaultValue) === 'militaires' && !data?.replay;
+}
+
 let atlasCache: PlaneAtlas | undefined;
 function atlas(): PlaneAtlas {
   atlasCache ??= buildPlaneAtlas([
     ...PLANE_CLASSES.flatMap((cls) => BAND_COLORS.map((color, band) => ({ key: `${cls}-${band}`, cls, color }))),
     ...PLANE_CLASSES.map((cls) => ({ key: `${cls}-ground`, cls, color: GROUND_COLOR })),
+    ...PLANE_CLASSES.map((cls) => ({ key: `${cls}-mil`, cls, color: MIL_COLOR })),
   ]);
   return atlasCache;
 }
@@ -388,6 +416,7 @@ async function loadPlanes(signal: AbortSignal): Promise<PlanesData> {
     const speedKt = p.speed ?? 0;
     const band = bandOf(altM, p.ground);
     const cls = planeClass(p.type, shapeOf(p.category, speedKt));
+    const military = p.military === true;
     return {
       hex: p.hex,
       callsign: p.callsign,
@@ -403,9 +432,10 @@ async function loadPlanes(signal: AbortSignal): Promise<PlanesData> {
       squawk: p.squawk,
       emergency: p.emergency,
       ground: p.ground,
+      military,
       cls,
       band,
-      icon: `${cls}-${band}`,
+      icon: military ? `${cls}-mil` : `${cls}-${band}`,
       alert: isAlert(p.squawk, p.emergency),
       observedAt: receivedAt - (collectionAgeS + p.seenPos) * 1000,
       offLon: 0,
@@ -493,6 +523,7 @@ function replayPlane(chunk: DecodedChunk, o: number): Plane {
     squawk,
     emergency,
     ground: false,
+    military: false,
     cls,
     band: 'ground',
     icon: `${cls}-ground`,
@@ -539,7 +570,7 @@ function placeReplayPlane(chunk: DecodedChunk, plane: Plane, time: number): bool
   const band = bandOf(plane.altM, plane.ground);
   if (band !== plane.band) {
     plane.band = band;
-    plane.icon = `${plane.cls}-${band}`;
+    plane.icon = plane.military ? `${plane.cls}-mil` : `${plane.cls}-${band}`;
   }
   // Inclinaison d'après le virage entre les deux points enregistrés qui encadrent l'instant.
   plane.bank = 0;
@@ -574,18 +605,18 @@ function shows(data: PlanesData, time: number): boolean {
   return data.replay ? isReplayTime(time) && data.replay.chunk !== null : !isReplayTime(time) && time <= Date.now() + 60_000;
 }
 
-let labelCache: { data: PlanesData; band: number; bucket: number; planes: Plane[] } | undefined;
+let labelCache: { data: PlanesData; band: number; bucket: number; only: boolean; planes: Plane[] } | undefined;
 
 /**
  * Vu de près, une étiquette par case : l'avion le plus haut (les mieux identifiés d'abord) l'emporte.
  * En relecture, les avions bougent et apparaissent : on refait le choix toutes les 5 s (`bucket`).
  */
-function labelled(data: PlanesData, zoom: number, source: Plane[], bucket: number): Plane[] {
+function labelled(data: PlanesData, zoom: number, source: Plane[], bucket: number, only: boolean): Plane[] {
   const band = zoomBand(zoom);
-  if (labelCache?.data !== data || labelCache.band !== band || labelCache.bucket !== bucket) {
-    const candidates = source.filter((p) => p.callsign);
+  if (labelCache?.data !== data || labelCache.band !== band || labelCache.bucket !== bucket || labelCache.only !== only) {
+    const candidates = source.filter((p) => p.callsign && (!only || p.military));
     const kept = declutter(candidates, zoom, { lon: (p) => p.lon, lat: (p) => p.lat, rank: (p) => -(p.altM ?? 0), box: LABEL_BOX_PX });
-    labelCache = { data, band, bucket, planes: kept };
+    labelCache = { data, band, bucket, only, planes: kept };
   }
   return labelCache.planes;
 }
@@ -613,12 +644,14 @@ export const planes = defineModule<PlanesData>({
   timeStepMs: 0, // les avions avancent à chaque image
   zoomBreaks: [...halfZoomBreaks(LABEL_MIN_ZOOM), MESH_MIN_ZOOM].sort((a, b) => a - b),
   followsTerrain: true,
-  settings: [RENDER_SETTING],
+  settings: [RENDER_SETTING, SHOW_SETTING],
 
   legend(): LegendItem[] {
     const icons = atlas();
     const items: LegendItem[] = BAND_COLORS.map((color, band) => ({ color, label: BAND_LABELS[band]!, size: 'small' }));
     items.push({ color: GROUND_COLOR, label: 'Au sol (ou altitude inconnue)', size: 'small' });
+    items.push({ color: 'transparent', icon: icons.dataUrl('narrow-mil'), label: 'Militaire ou d’État (sarcelle, quelle que soit l’altitude)' });
+    items.push({ color: 'transparent', icon: ringDataUrl(MIL_COLOR), label: 'Appareil militaire (anneau sarcelle)' });
     items.push({ color: 'transparent', icon: ringDataUrl(ALERT_CSS), label: 'Urgence (anneau rouge) : squawk 7500, 7600, 7700' });
     items.push({ color: 'transparent', icon: selectionRingDataUrl(), label: 'Avion sélectionné (anneau blanc)' });
     // Une ligne par silhouette, à la couleur de la croisière moyenne : la forme dit le type d'appareil.
@@ -634,7 +667,7 @@ export const planes = defineModule<PlanesData>({
   // Bascule entre le direct et la relecture, et d'un tronçon à l'autre.
   needsReload: (data, time) => (isReplayTime(time) ? !data.replay || data.replay.key !== replayKey('avions', time) : !!data.replay),
 
-  summary({ data, time }) {
+  summary({ data, time, settings }) {
     if (!data) return null;
     if (data.replay) {
       if (!isReplayTime(time)) return null;
@@ -649,13 +682,19 @@ export const planes = defineModule<PlanesData>({
       return `${replayLabel(time)} · ${parts.join(', ')}`;
     }
     if (!shows(data, time)) return null;
-    const flying = data.planes.filter((p) => !p.ground);
+    const only = militaryOnly(settings, data);
+    const all = only ? data.planes.filter((p) => p.military) : data.planes;
+    const flying = all.filter((p) => !p.ground);
     const alerts = flying.filter((p) => p.alert).length;
-    const onGround = data.planes.length - flying.length;
+    const onGround = all.length - flying.length;
     const age = Math.round((Date.now() - data.collectedAt) / 1000);
-    const parts = [`${nf(flying.length)} avion${flying.length > 1 ? 's' : ''} en vol`];
+    const parts = [`${nf(flying.length)} ${only ? 'militaire' : 'avion'}${flying.length > 1 ? 's' : ''} en vol`];
     if (onGround > 0) parts.push(`${nf(onGround)} au sol`);
     if (alerts > 0) parts.push(`${nf(alerts)} en urgence`);
+    if (!only) {
+      const military = flying.filter((p) => p.military).length;
+      if (military > 0) parts.push(`dont ${nf(military)} militaire${military > 1 ? 's' : ''}`);
+    }
     const stale = age > STALE_AFTER_S ? ` · positions vieilles de ${nf(age)} s : serveur sans nouvelles` : '';
     return `En direct · ${parts.join(', ')}${stale}`;
   },
@@ -665,6 +704,7 @@ export const planes = defineModule<PlanesData>({
     const parameters = OVER_MAP;
     const icons = atlas();
     const now = Date.now();
+    const only = militaryOnly(settings, data);
 
     // Position de chaque avion à cet instant, à son altitude réelle (sans exagération du relief).
     // En relecture, `observedAt` vaut l'instant affiché : `extrapolate` rend la position interpolée telle quelle.
@@ -673,6 +713,7 @@ export const planes = defineModule<PlanesData>({
     const [west, south, east, north] = view.bounds();
     const margin = Math.max(east - west, north - south) * 0.5;
     for (const plane of data.replay ? updateReplay(data.replay, time) : data.planes) {
+      if (only && !plane.military) continue;
       const at = extrapolate(plane, time);
       if (
         (now - plane.groundAt > SHADOW_REFRESH_MS || plane.groundVersion !== terrain.version) &&
@@ -691,8 +732,11 @@ export const planes = defineModule<PlanesData>({
       plane.shadow[2] = plane.groundZ;
       shown.push(plane);
     }
-    const chosen = selection ? data.byHex.get((selection as PlanesSelection).hex) : undefined;
+    const picked = selection ? data.byHex.get((selection as PlanesSelection).hex) : undefined;
+    // Un avion choisi qu'un réglage masque n'a plus d'anneau ni de trait de hauteur.
+    const chosen = picked && (!only || picked.military) ? picked : undefined;
     const alerts = shown.filter((p) => p.alert);
+    const military = shown.filter((p) => p.military && !p.ground);
     const flying = shown.filter((p) => !p.ground && p.altM !== null);
     const showLabels = view.zoom >= LABEL_MIN_ZOOM;
     const { bearing, pitch, zoom } = view;
@@ -702,7 +746,7 @@ export const planes = defineModule<PlanesData>({
     const models = wants3d(settings) && zoom >= MESH_MIN_ZOOM;
     const meshes = models ? aircraftMeshes() : undefined;
     const grow = (p: Plane) => displayed(p, zoom).spanMeters / SIZING[p.cls].spanMeters;
-    const bandColor = (p: Plane): Color => hexColor(p.band === 'ground' ? GROUND_COLOR : BAND_COLORS[p.band]!);
+    const bandColor = (p: Plane): Color => hexColor(p.military ? MIL_COLOR : p.band === 'ground' ? GROUND_COLOR : BAND_COLORS[p.band]!);
     const ringRadius = (p: Plane) => RING_RADIUS * displayed(p, zoom).spanMeters;
 
     return [
@@ -777,6 +821,31 @@ export const planes = defineModule<PlanesData>({
         updateTriggers: { getSize: sizeTrigger },
         parameters,
       }),
+      military.length > 0 &&
+        // Militaire ou d'État : anneau sarcelle sur un liseré blanc, un peu plus large que celui des urgences, pour que la
+        // couleur ne soit pas seule à le dire.
+        [
+          ['avions/militaires-blanc', WHITE, 4],
+          ['avions/militaires', hexColor(MIL_COLOR), 2],
+        ].map(
+          ([id, color, width]) =>
+            new ScatterplotLayer<Plane>({
+              id: id as string,
+              data: military,
+              getPosition: (p) => p.position,
+              radiusUnits: 'meters',
+              getRadius: (p) => ringRadius(p) * MILITARY_RING_GROWTH,
+              radiusMinPixels: 11,
+              filled: false,
+              stroked: true,
+              getLineColor: color as Color,
+              lineWidthUnits: 'pixels',
+              getLineWidth: width as number,
+              billboard: true,
+              updateTriggers: { getRadius: sizeTrigger },
+              parameters,
+            }),
+        ),
       alerts.length > 0 &&
         // Urgence : anneau rouge doublé de blanc (le blanc dessous), pour se lire sur toute carte.
         [
@@ -828,7 +897,7 @@ export const planes = defineModule<PlanesData>({
       showLabels &&
         new TextLayer<Plane>({
           id: 'avions/indicatifs',
-          data: labelled(data, view.zoom, data.replay ? shown : data.planes, data.replay ? Math.floor(time / 5000) : 0).filter((p) => !p.ground && p.here !== false),
+          data: labelled(data, view.zoom, data.replay ? shown : data.planes, data.replay ? Math.floor(time / 5000) : 0, only).filter((p) => !p.ground && p.here !== false),
           getPosition: (p) => p.position,
           getText: (p) => p.callsign ?? '',
           characterSet: 'auto',
@@ -862,6 +931,7 @@ export const planes = defineModule<PlanesData>({
     const fields: Array<[string, string]> = [];
     if (plane.registration) fields.push(['Immatriculation', plane.registration]);
     if (plane.type) fields.push(['Type', plane.type]);
+    if (plane.military) fields.push(['Appareil', 'Militaire ou d’État']);
     // Altitude, vitesse et cap sont dans les chiffres clés ; restent la montée et les identifiants.
     if (!plane.ground) fields.push(['Montée', describeClimb(plane.climbFpm)]);
     if (plane.squawk) fields.push(['Squawk', plane.squawk]);
@@ -888,13 +958,16 @@ export const planes = defineModule<PlanesData>({
       : plane.alert
         ? `L’appareil signale une urgence (${plane.emergency}).`
         : undefined;
+    const militaryNote = plane.military
+      ? 'Classé militaire ou d’État d’après la base d’appareils de la communauté (drapeau « military », d’après l’immatriculation et le code ICAO) : elle peut se tromper ou ne pas être à jour. Beaucoup d’appareils militaires n’émettent pas leur position, ceux-ci n’apparaissent donc pas.'
+      : undefined;
     return {
-      kind: plane.cls === 'heli' ? PLANE_NAMES.heli.name : `Avion · ${PLANE_NAMES[plane.cls].name}`,
+      kind: plane.military ? `Militaire · ${PLANE_NAMES[plane.cls].name}` : plane.cls === 'heli' ? PLANE_NAMES.heli.name : `Avion · ${PLANE_NAMES[plane.cls].name}`,
       title: plane.callsign ?? plane.registration ?? plane.hex.toUpperCase(),
       status,
       figures,
       fields,
-      note: alert,
+      note: [alert, militaryNote].filter(Boolean).join(' ') || undefined,
       actions: [{ label: 'globe.adsb.lol', href: `https://globe.adsb.lol/?icao=${plane.hex}` }],
     };
   },
