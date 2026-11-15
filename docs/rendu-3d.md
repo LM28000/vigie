@@ -44,6 +44,35 @@ MapLibre ne sait pas découper une couche à l'écran, et avec le relief 3D ses 
 
 ![Rideau avant / après : photo de 1950-1965 à gauche, carte actuelle à droite](images/photos.jpg)
 
+## Modes de vision
+
+Un sélecteur applique un rendu à toute la carte (normal, vision nocturne, thermique, écran cathodique ; usage dans [utilisation.md](utilisation.md#modes-de-vision)). Code : `core/vision.ts` (état, adresse, préférence), `ui/VisionControl.tsx` (bouton, menu, filtres SVG), `ui/vision.css`.
+
+**Approche retenue : filtre CSS + SVG sur le canevas, surcouche CSS sans pointeur.** Deux approches ont été comparées.
+
+| | Filtre CSS / SVG sur le canevas | Passe de post-traitement WebGL |
+|---|---|---|
+| Couverture | Tout ce que MapLibre et deck.gl dessinent dans le canevas partagé (mode « interleaved ») ; le fond, les bâtiments, les maquettes, les avions. | Idem, mais il faut intercaler une passe dans le rendu de MapLibre. |
+| Interface | Intacte : les commandes et panneaux sont des éléments HTML hors du canevas. | Idem. |
+| Clics | Inchangés (le filtre ne touche pas aux événements ; la surcouche est en `pointer-events: none`). | Inchangés. |
+| Coût de mise en œuvre | Une feuille CSS, quelques filtres SVG, aucune dépendance. | Rendre la carte dans une texture puis la repasser dans un shader : MapLibre 5 et deck.gl 9.4 partagent le même contexte et le même tampon, la passe devrait suivre leurs changements d'état (relief, globe, ombres). Fragile. |
+| Coût à l'exécution | Faite par le compositeur du navigateur, sur le processeur graphique (voir les mesures) ; une copie de la carte par image. | Une passe plein écran par image, comparable. |
+| Limites | Pas de vraie courbure d'écran, grain et balayage en simple surcouche ; palette limitée à un traitement par canal. | Tout est possible (courbure, vraie aberration radiale, bruit par pixel). |
+
+La première suffit : les quatre rendus se décrivent comme des matrices de couleur et des courbes par canal, que `feColorMatrix` et `feComponentTransfer` font directement.
+
+- **Vision nocturne** : luminance recopiée sur les trois canaux (`feColorMatrix`), puis une courbe par canal (`tableValues`) qui donne le vert phosphore et relève les ombres sans écraser les hautes lumières du fond de jour (une simple correction gamma rendait le jour uniformément vert). Surcouche : grain (bruit `feTurbulence` en image SVG répétée, décalé par à-coups, sans mode de fusion coûteux) et vignettage serré.
+- **Thermique** : palette « ironbow » (noir, violet, rouge, jaune, blanc), choisie plutôt que le blanc chaud de la FLIR parce que la variation de teinte sépare mieux les niveaux de luminance qu'une rampe de gris (sur une carte claire, presque tout serait blanc), et que c'est le rendu qu'on attend d'une caméra thermique. La carte de jour est claire presque partout : la luminance est donc redressée avant la palette (point noir à 0,4, exposant 2,4) pour que les surfaces ordinaires tombent dans l'orange, les routes ressortent en jaune clair et les bâtiments et l'eau en violet. De nuit (fond de carte sombre, luminance de 0,03 à 0,4), une seconde palette étire la même rampe sur cette plage ; elle est choisie par `html[data-nuit]`, que `VisionControl.tsx` pose d'après `currentNight()`. Les tables sont calculées dans `VisionControl.tsx` à partir de la liste de points `THERMAL_STOPS`.
+- **Écran cathodique** : rouge et bleu isolés par `feColorMatrix` et décalés de 1,4 px en sens inverses (`feOffset`) puis recombinés (`feBlend screen`) : aberration chromatique ; teinte ambrée et contraste relevé. Surcouche : lignes de balayage (un trait sombre sur 3 px) et vignettage. La courbure n'est pas simulée.
+- **Mouvement** : seul le grain bouge, par à-coups. Avec `prefers-reduced-motion`, rien ne bouge (la règle générale de `styles.css` coupe les animations, et `vision.css` le redit).
+
+**Pièges** :
+- Les filtres sont posés sur `.maplibregl-canvas` seulement. Le second canevas de deck.gl de l'analyse de zone (`.deck-canvas`) n'est pas filtré, pour que le contour dessiné reste lisible.
+- `.map { isolation: isolate }` : la surcouche (`z-index: 1`, dans le conteneur du canevas) doit rester sous les panneaux, sinon elle les teinte.
+- Les modes colorés changent le sens des couleurs de la carte : les rampes de données (retards, prix…) n'y sont plus lisibles. Le sélecteur ramène en un geste au mode normal.
+
+**Mesures** : voir [Performances](#performances).
+
 ## Pièges connus
 
 - **MapLibre est volontairement en version 5.** deck.gl 9.4 utilise des éléments internes de MapLibre que la version 6 a renommés : la carte plante dès que le relief 3D est actif. Il faudra repasser en v6 quand deck.gl la prendra en charge.
@@ -62,6 +91,19 @@ Mesures du dépôt (`perf/resultats-*.json`, vues fixes inclinées, rotation de 
 | Lyon, de nuit | 58,1 ms / 59,1 ms | 21,2 ms / 20,0 ms |
 
 Les optimisations sont celles des commits `8bb8836` et `ecd3b52` (12 novembre 2026) : barre d'échelle sans lecture du GPU pendant le mouvement, altitudes du sol mémorisées, gares et véhicules posés sur le relief dans la vue seulement, altitude du sol des avions relue dans la vue seulement. Après elles, les vues de France (zoom 6) et des Alpes (zoom 11) mesurent 16,7 ms par image (soit la cadence de 60 images par seconde de l'écran) pour 3,8 ms et 8,1 ms de CPU par image. Ces mesures ont été faites sur la machine de développement ; elles montrent un ordre de grandeur, pas une garantie.
+
+### Coût des modes de vision
+
+Mesures du 15 novembre 2026, Chrome (ANGLE / Metal) sur la machine de développement, Paris à zoom 14, inclinaison 55°, rotation de 6 secondes, trains, transports et avions affichés, écran à densité 2, deux fenêtres : bureau (1280×800) et téléphone émulé (390×844, tactile). Images par seconde et CPU du fil principal par image :
+
+| Mode | Bureau : images/s · CPU par image | Téléphone émulé : images/s · CPU par image |
+|---|---|---|
+| Normal | 29,9 · 13,3 ms | 29,8 · 8,0 ms |
+| Vision nocturne | 29,9 · 15,2 ms | 29,9 · 7,0 ms |
+| Thermique | 30,0 · 13,6 ms | 29,8 · 6,7 ms |
+| Écran cathodique | 30,0 · 13,2 ms | 29,9 · 7,4 ms |
+
+À lire avec précaution : la machine travaillait à 30 images par seconde même en mode normal (plafond du navigateur sous charge, d'autres sessions tournaient en parallèle), ce qui masque un surcoût de quelques millisecondes sur le processeur graphique. Ce que les mesures montrent : les filtres ne coûtent rien au fil principal (les écarts de CPU sont dans le bruit) et ne font pas passer sous le plafond. Le téléphone émulé tourne sur le processeur graphique du Mac, pas sur celui d'un vrai téléphone : la cadence d'un téléphone de milieu de gamme n'est pas mesurée. Si elle gênait, le mode cathodique, qui enchaîne le plus de filtres, serait le premier à alléger (supprimer l'aberration chromatique).
 
 Principes appliqués dans le code :
 

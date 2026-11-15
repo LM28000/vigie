@@ -28,9 +28,27 @@ Raccourcis :
 | `Espace` | Lecture ou pause |
 | `←` / `→` | Une heure avant ou après |
 | `L` | Ouvrir les couches |
+| `V` | Passer au mode de vision suivant |
 | `Échap` | Fermer |
 
 Sur téléphone, tout passe dans une feuille qui monte du bas, à trois hauteurs.
+
+### Modes de vision
+
+Le bouton en forme d'œil, parmi les commandes de la carte (en bas à droite, au-dessus de l'analyse de zone), ouvre un menu de quatre rendus appliqués à toute la carte, fond et couches comprises. Le bouton se remplit quand un mode est actif.
+
+| Mode | Rendu |
+|---|---|
+| Normal | La carte telle quelle (par défaut). |
+| Vision nocturne | Monochrome vert phosphore, ombres relevées, léger grain animé, bords assombris. |
+| Thermique | Fausses couleurs d'après la luminance : noir, violet, rouge, jaune, blanc. Les surfaces claires (routes, places) ressortent en jaune, les bâtiments et l'eau en violet. |
+| Écran cathodique | Lignes de balayage, franges rouge et bleu sur les contours, teinte ambrée, bords assombris. |
+
+- **Seule la carte change** : la recherche, les pastilles, la fiche, la frise et les commandes gardent leurs couleurs. Les clics et les gestes fonctionnent comme d'habitude, les objets restent sélectionnables.
+- **Clavier** : `V` passe au mode suivant (annoncé aux lecteurs d'écran) ; dans le menu, les flèches changent de mode, `Entrée` ou `Espace` valide, `Échap` ferme.
+- **Mémoire** : le mode est dans l'adresse (`vision=nocturne`, `vision=thermique` ou `vision=cathodique` ; absent : normal), donc un lien partagé rouvre le même rendu. Il est aussi retenu dans le navigateur comme mode de départ quand l'adresse n'en dit rien ; un mode venu d'une adresse n'écrase pas cette préférence.
+- **`prefers-reduced-motion`** : le grain de la vision nocturne reste fixe (aucune animation). Aucun mode ne scintille.
+- **Lisibilité** : les modes colorés changent le sens des couleurs de la carte (le rouge d'un retard, le bleu d'un TER). Revenir à « Normal » pour lire une légende.
 
 ### Visite guidée
 

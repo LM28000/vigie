@@ -38,7 +38,7 @@ import { ZonePanel } from './ZonePanel';
 const CLOSE_RADIUS_PX = 16;
 
 /** La carte, dès qu'elle est branchée (le gestionnaire ne prévient pas) et si React la recrée. */
-function useMap(manager: ModuleManager): MapLibreMap | undefined {
+export function useMap(manager: ModuleManager): MapLibreMap | undefined {
   const [map, setMap] = useState<MapLibreMap | undefined>(() => manager.getMap());
   useEffect(() => {
     const check = () => setMap((current) => (manager.getMap() === current ? current : manager.getMap()));
