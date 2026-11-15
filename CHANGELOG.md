@@ -2,6 +2,10 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 15 novembre 2026 — Modes de vision
+
+- **Modes de vision** : un bouton en forme d'œil parmi les commandes de la carte (et la touche `V`) applique un rendu à toute la carte, fond et couches : vision nocturne (vert phosphore, grain, vignettage), thermique (fausses couleurs noir, violet, rouge, jaune, blanc), écran cathodique (lignes de balayage, aberration chromatique, teinte ambrée). Filtres CSS et SVG sur le seul canevas de la carte, sans dépendance ; interface et clics intacts ; mode gardé dans l'adresse (`vision=`) et en préférence locale ; aucun mouvement avec `prefers-reduced-motion` ([docs/rendu-3d.md](docs/rendu-3d.md#modes-de-vision), [docs/utilisation.md](docs/utilisation.md#modes-de-vision)).
+
 ## 14 novembre 2026 — Relief plus fin, avions sans refus
 
 - **Relief Mapterhorn** : `maxzoom` relevé de 12 à 16 (tuiles de 0,8 m par pixel en France issues du LiDAR) ; le relief « LiDAR HD » en 3D devient un réglage éteint par défaut, son altitude étant la même jusqu'au zoom 16 ([docs/rendu-3d.md](docs/rendu-3d.md)).

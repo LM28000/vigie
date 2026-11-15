@@ -14,15 +14,17 @@
  *   objet=trains:%7B%22type%22…      module sélectionné, puis la valeur de `select` en JSON
  *   zone=c:2.35,48.85,5000           zone de l'analyse (cercle : centre et rayon en m ; polygone : `p:lon,lat;lon,lat…`), voir `zone.ts`
  *   zscrutin=l24t2                   scrutin du panneau d'analyse de zone
+ *   vision=thermique                 mode de vision de la carte (nocturne, thermique, cathodique), absent : normal (voir `vision.ts`)
  *
  * Les préférences du navigateur (`localStorage`) restent la valeur par défaut quand
  * l'adresse ne dit rien : ce qui vient de l'adresse n'y est pas enregistré.
  */
 import { clock } from './clock';
 import type { ModuleManager } from './moduleManager';
+import { isVisionMode, vision } from './vision';
 import { zoneUrl } from './zone';
 
-const KEYS = ['couches', 'reglages', 't', 'vitesse', 'pause', 'objet', 'depuis', 'zone', 'zscrutin'] as const;
+const KEYS = ['couches', 'reglages', 't', 'vitesse', 'pause', 'objet', 'depuis', 'zone', 'zscrutin', 'vision'] as const;
 /** Drapeau de l'adresse qui lance la visite guidée (`#visite`). Ce n'est pas un état à rouvrir : il est retiré dès qu'il est lu. */
 const TOUR_FLAG = 'visite';
 /** Pendant un rejeu en lecture, l'instant de l'adresse est rafraîchi à ce rythme. */
@@ -105,6 +107,9 @@ export function applySharedState(manager: ModuleManager, fragment?: string): voi
   const zone = safeDecode(params.get('zone') ?? '');
   if (zone) zoneUrl.write(zone, safeDecode(params.get('zscrutin') ?? ''));
 
+  const visionMode = safeDecode(params.get('vision') ?? '');
+  if (isVisionMode(visionMode)) vision.set(visionMode, persist);
+
   const object = params.get('objet');
   if (object) {
     const colon = object.indexOf(':');
@@ -152,6 +157,9 @@ function stateParams(manager: ModuleManager): Array<[string, string]> {
 
   const zone = zoneUrl.read();
   if (zone) ours.push(['zone', encodeURIComponent(zone.zone)], ['zscrutin', encodeURIComponent(zone.scrutin)]);
+
+  const visionMode = vision.getSnapshot();
+  if (visionMode !== 'normal') ours.push(['vision', visionMode]);
 
   const selection = manager.getSelection();
   if (selection) ours.push(['objet', `${encodeURIComponent(selection.moduleId)}:${encodeURIComponent(JSON.stringify(selection.value))}`]);

@@ -1,0 +1,217 @@
+/*
+ * Modes de vision (core/vision.ts, ui/VisionControl.tsx).
+ *
+ * Le mode est dans `html[data-vision]`. Il s'applique au seul canevas de la carte (`filter` CSS qui renvoie à un filtre SVG
+ * défini dans VisionControl.tsx) : les commandes, les panneaux et la fiche ne sont pas dans ce canevas et restent intacts.
+ * Par-dessus, `.vision-overlay` (dans le conteneur du canevas, sous les commandes MapLibre) ajoute balayage, grain et vignettage ;
+ * il ne reçoit aucun événement de pointeur, les clics et les gestes passent à la carte.
+ *
+ * Le second canevas de deck.gl de l'analyse de zone (`.deck-canvas`) n'est volontairement pas filtré : le contour reste lisible.
+ */
+
+/* La carte forme son propre empilement : la surcouche (z-index 1) reste sous les panneaux, qui ne sont pas teintés. */
+.map {
+  isolation: isolate;
+}
+
+.vision-defs {
+  position: absolute;
+  pointer-events: none;
+}
+
+html[data-vision='nocturne'] .maplibregl-canvas {
+  filter: url(#vision-nocturne);
+}
+
+html[data-vision='thermique'] .maplibregl-canvas {
+  filter: url(#vision-thermique);
+}
+
+html[data-vision='cathodique'] .maplibregl-canvas {
+  filter: url(#vision-cathodique);
+}
+
+/* --- Surcouches --- */
+
+.vision-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+html[data-vision]:not([data-vision='normal']) .vision-overlay {
+  display: block;
+}
+
+.vision-overlay > * {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+/* Vignettage : les bords s'assombrissent, plus ou moins selon le mode. */
+.vision-vignette {
+  display: block;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+html[data-vision='nocturne'] .vision-vignette {
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 8, 0, 0.78) 100%);
+}
+
+html[data-vision='thermique'] .vision-vignette {
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+html[data-vision='cathodique'] .vision-vignette {
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(10, 4, 0, 0.7) 100%);
+}
+
+/* Lignes de balayage (écran cathodique) : un trait sombre tous les 3 px, et un halo ambré très léger. */
+html[data-vision='cathodique'] .vision-scanlines {
+  display: block;
+  inset: 0;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0.3) 2px, rgba(0, 0, 0, 0.3) 3px),
+    rgba(255, 150, 40, 0.05);
+}
+
+/* Grain (vision nocturne) : un bruit vert répété, décalé par à-coups, une dizaine de fois par seconde. */
+html[data-vision='nocturne'] .vision-grain {
+  display: block;
+  inset: -64px;
+  opacity: 0.2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45  0 0 0 0 1  0 0 0 0 0.45  0 0 0 2.4 -0.7'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  animation: vision-grain 0.9s steps(1) infinite;
+}
+
+@keyframes vision-grain {
+  0% { transform: translate(0, 0); }
+  11% { transform: translate(-37px, 21px); }
+  22% { transform: translate(29px, -43px); }
+  33% { transform: translate(-12px, -58px); }
+  44% { transform: translate(51px, 14px); }
+  55% { transform: translate(-46px, 38px); }
+  66% { transform: translate(8px, 52px); }
+  77% { transform: translate(-60px, -9px); }
+  88% { transform: translate(33px, 47px); }
+}
+
+/* Sans mouvement (prefers-reduced-motion) : le grain reste mais fixe. L'animation est déjà coupée par styles.css ;
+   on le redit ici pour que la règle tienne même si cette feuille est lue seule. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-vision='nocturne'] .vision-grain {
+    animation: none;
+  }
+}
+
+/* --- Bouton et menu (en bas à droite, avec les commandes de la carte) --- */
+
+.vision-ctrl {
+  position: relative;
+}
+
+.vision-ctrl .maplibregl-ctrl-group button {
+  display: grid;
+  place-items: center;
+  color: var(--ui-ink);
+}
+
+.vision-ctrl .maplibregl-ctrl-group button.is-active {
+  background: var(--ui-selected);
+}
+
+.vision-menu {
+  position: absolute;
+  right: calc(100% + var(--space-4));
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 232px;
+  padding: var(--space-3);
+}
+
+.vision-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: var(--ui-ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.vision-menu__item:hover {
+  background: var(--ui-control-hover);
+}
+
+.vision-menu__item.is-on {
+  background: var(--ui-selected);
+}
+
+.vision-menu__item:focus-visible {
+  outline: 2px solid var(--ui-ink);
+  outline-offset: -2px;
+}
+
+.vision-menu__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vision-menu__label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vision-menu__hint {
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+
+/* Pastille : un aperçu du rendu (dégradé), pas une information en soi. */
+.vision-menu__swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-sm);
+}
+
+.vision-menu__swatch--normal {
+  background: linear-gradient(135deg, #e9e5dc, #8ea4b8);
+}
+
+.vision-menu__swatch--nocturne {
+  background: linear-gradient(135deg, #031a03, #4dff5e);
+}
+
+.vision-menu__swatch--thermique {
+  background: linear-gradient(135deg, #000, #330061 25%, #e02a24 55%, #ffd10f 80%, #fff);
+}
+
+.vision-menu__swatch--cathodique {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0, 0, 0, 0.45) 2px, rgba(0, 0, 0, 0.45) 3px),
+    linear-gradient(135deg, #3a2204, #ffb347);
+}
+
+@media (max-width: 719.98px) {
+  .vision-menu {
+    width: 216px;
+  }
+}

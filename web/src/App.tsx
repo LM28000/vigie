@@ -11,6 +11,7 @@ import { LayerChips } from './ui/LayerChips';
 import { LayerDrawer } from './ui/LayerDrawer';
 import { MobileSheet, type Snap } from './ui/MobileSheet';
 import { TimeBar } from './ui/TimeBar';
+import { VisionControl } from './ui/VisionControl';
 import { ZoneTool } from './ui/ZoneTool';
 import { TourPanel, useTour } from './ui/Tour';
 import { Welcome, shouldShowWelcome } from './ui/Welcome';
@@ -123,6 +124,7 @@ export function App() {
       )}
 
       <ZoneTool manager={manager} phone={phone} />
+      <VisionControl manager={manager} />
 
       {welcome && <Welcome manager={manager} onClose={() => setWelcome(false)} />}
     </div>
@@ -131,7 +133,7 @@ export function App() {
 
 /**
  * Raccourcis : Espace lecture/pause · ← → −1 h/+1 h · L couches · Échap fermer. Pendant la visite guidée : Espace pause, ← → étape, Échap quitte.
- * (⌘K et / appartiennent à la recherche.) Ils n'agissent pas quand un champ de saisie a le focus.
+ * (⌘K et / appartiennent à la recherche ; V, les modes de vision, est géré par `ui/VisionControl.tsx`.) Ils n'agissent pas quand un champ de saisie a le focus.
  */
 function useShortcuts({ toggleLayers, close }: { toggleLayers: () => void; close: () => void }) {
   useEffect(() => {
