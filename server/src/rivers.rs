@@ -226,10 +226,32 @@ fn in_france(lon: f64, lat: f64) -> bool {
     lon >= FRANCE.0 && lat >= FRANCE.1 && lon <= FRANCE.2 && lat <= FRANCE.3
 }
 
-/// Variation sur 3 heures en millimètres, d'après des hauteurs triées. `None` si aucune mesure n'est entre 1 h et 4 h
+/// Un saut de hauteur est un défaut de mesure, pas une crue : d'au moins `JUMP_MM` entre deux mesures consécutives
+/// ET d'au moins `JUMP_RATE_M_PER_H` mètres par heure. Relevé sur 2 950 stations et 6 heures de mesures réelles : les
+/// variations vraies culminent à 3 m/h (crue de l'Esquielle, 1,24 m à 0,60 m en 3 h, comprise), alors que quatre sauts
+/// (changement de zéro d'échelle de 2,9 m en 5 min au Vidourle, valeur 9999 d'un capteur, pointe de 4,3 m en 5 min)
+/// sont à 25 m/h et plus : l'écart est net. Hub'Eau ne les signale pas : ces mesures portent la même qualification
+/// (16, « non qualifiée »), le même statut (4, « brute ») et la même continuité (0) que toutes les autres, donc les
+/// champs de qualification ne permettent pas de les écarter.
+const JUMP_MM: i32 = 1000;
+const JUMP_RATE_M_PER_H: f64 = 10.0;
+
+/// Les hauteurs depuis le dernier saut : avant lui, l'échelle n'est plus la même. Sans saut, tout.
+fn reliable_tail(heights: &[(i64, i32)]) -> &[(i64, i32)] {
+    let jump = heights.windows(2).rposition(|w| {
+        let step = (w[1].1 - w[0].1).abs();
+        let hours = (w[1].0 - w[0].0).max(1) as f64 / 3600.0;
+        step >= JUMP_MM && f64::from(step) / 1000.0 / hours >= JUMP_RATE_M_PER_H
+    });
+    jump.map_or(heights, |i| &heights[i + 1..])
+}
+
+/// Variation sur 3 heures en millimètres, d'après des hauteurs triées, depuis le dernier saut s'il y en a un (voir
+/// `reliable_tail` : la station perd sa tendance pour au moins une heure). `None` si aucune mesure n'est entre 1 h et 4 h
 /// avant la dernière ; sinon la mesure la plus proche de 3 h, la variation étant ramenée à 3 h (une station qui ne
 /// transmet que depuis peu, ou par à-coups, n'a pas toujours 3 h de recul).
 fn change_over_3h(heights: &[(i64, i32)]) -> Option<i32> {
+    let heights = reliable_tail(heights);
     let &(last_t, last_h) = heights.last()?;
     let target = last_t - 3 * 3600;
     let &(t, h) = heights
@@ -611,6 +633,25 @@ mod tests {
         assert_eq!(change_over_3h(&heights[4..]), Some(240));
         assert_eq!(change_over_3h(&heights[6..]), Some(240));
         assert_eq!(change_over_3h(&[]), None);
+    }
+
+    #[test]
+    fn drops_the_trend_across_a_level_shift_but_keeps_a_real_flood_recession() {
+        // Le Vidourle à Conqueyrac, mesures réelles toutes les 5 minutes : le zéro d'échelle saute de 2,9 m à 14:00.
+        let vidourle: [i32; 14] = [115177, 115177, 115176, 115175, 115175, 115174, 115173, 115172, 112289, 112288, 112285, 112281, 112275, 112269];
+        let base = 1_794_835_200; // 13:20 UTC
+        let shifted: Vec<(i64, i32)> = vidourle.iter().enumerate().map(|(i, &h)| (base - 4 * 3600 + 20 * 60 + i as i64 * 300, h)).collect();
+        // Avant le saut, 3 h de recul fictif : sans la règle, la tendance serait de −2,9 m.
+        let mut long: Vec<(i64, i32)> = (0..40).map(|i| (base - 4 * 3600 + i * 300, 115_200)).collect();
+        long.extend(shifted.iter().map(|&(t, h)| (t + 3 * 3600, h)));
+        long.sort_unstable();
+        assert_eq!(change_over_3h(&long), None);
+        // La crue de l'Esquielle (mesures réelles, toutes les 15 minutes) : 1,24 m à 0,60 m en 3 h, c'est vrai.
+        let esquielle: [i32; 13] = [1240, 1120, 1000, 890, 790, 720, 670, 650, 640, 630, 620, 610, 600];
+        let flood: Vec<(i64, i32)> = esquielle.iter().enumerate().map(|(i, &h)| (base + i as i64 * 900, h)).collect();
+        assert_eq!(change_over_3h(&flood), Some(-640));
+        // Un seul saut isolé coupe l'historique avant lui, un saut de 9999 aussi.
+        assert_eq!(reliable_tail(&[(0, 68), (600, 9999), (1200, 70), (1800, 71)]).len(), 2);
     }
 
     #[test]

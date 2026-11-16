@@ -5,6 +5,7 @@ Historique du projet, regroupé par phase et par date, reconstruit à partir de 
 ## 16 novembre 2026 — Rivières en direct
 
 - **Rivières en direct** (Environnement) : les ~2 800 stations hydrométriques de métropole (Hub'Eau, API Hydrométrie, Licence Ouverte), un point par station coloré par la **tendance de la hauteur sur 3 h** (monte vite, monte, stable, baisse ; échelle divergente validée jour et nuit, doublée d'un symbole), anneau vide pour les stations sans mesure récente, anneau de la couleur de vigilance quand le tronçon Vigicrues voisin est jaune, orange ou rouge. Fiche : hauteur, débit, tendance, courbe de 48 h chargée à l'ouverture, lien Hydroportail. Serveur : `GET /api/rivieres`, `GET /api/rivieres/{code}` ; relevé toutes les 15 min par lots de 20 000 (jamais une requête par station), référentiel une fois par jour, quelques Mo en mémoire. En direct seulement ([docs/couches.md](docs/couches.md#rivières-en-direct-hubeau-hydrométrie)).
+- Mesures aberrantes écartées (saut d'au moins 1 m à plus de 10 m/h entre deux mesures : zéro d'échelle changé, valeur 9999) et étiquettes désencombrées.
 - Fiche : `InfoChart.grain` règle le pas des repères verticaux (des centimètres de rivière, pas des mètres de marée).
 
 ## 16 novembre 2026 — Foudre en direct, webcams ouvertes, recherche de webcams et de modes de vision

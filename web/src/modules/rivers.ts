@@ -28,6 +28,7 @@ import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { isLiveTime, measuredStatus, plainStatus } from '../core/infoStatus';
 import { defineModule, type InfoContent } from '../core/module';
 import { ModuleManager } from '../core/moduleManager';
+import { declutter, halfZoomBreaks, zoomBand } from '../map/declutter';
 import { OVER_MAP } from '../map/parameters';
 import { formatRelative, formatTime } from '../ui/format';
 import { ink, type IconSheet, KEY, packIcons, selectionRing, zoomRamp } from './symbols';
@@ -246,6 +247,30 @@ interface Shown {
   trend: Trend;
 }
 
+/** Encombrement à l'écran (pixels) d'une étiquette de variation et d'une étiquette de nom. */
+const CHANGE_BOX_PX = { width: 100, height: 30 };
+const NAME_BOX_PX = { width: 190, height: 28 };
+
+let labelCache: { shown: Shown[]; band: number; changes: Shown[]; names: Shown[] } | undefined;
+/**
+ * Étiquettes sans chevauchement, par case de la taille d'une étiquette : pour les variations, la plus forte (en valeur
+ * absolue) l'emporte ; pour les noms, la station en vigilance puis la plus mouvante.
+ */
+function labelled(shown: Shown[], zoom: number): { changes: Shown[]; names: Shown[] } {
+  const band = zoomBand(zoom);
+  if (labelCache?.shown !== shown || labelCache.band !== band) {
+    const moving = shown.filter((s) => s.trend === 'fast-up' || s.trend === 'up' || s.trend === 'down');
+    const at = { lon: (s: Shown) => s.station.lon, lat: (s: Shown) => s.station.lat };
+    labelCache = {
+      shown,
+      band,
+      changes: zoom >= 9 ? declutter(moving, zoom, { ...at, rank: (s) => -Math.abs(s.station.d ?? 0), box: CHANGE_BOX_PX }) : [],
+      names: zoom >= 10.5 ? declutter(shown, zoom, { ...at, rank: (s) => -s.station.rank - Math.abs(s.station.d ?? 0) / 1e6, box: NAME_BOX_PX }) : [],
+    };
+  }
+  return labelCache;
+}
+
 let shownCache: { data: RiversData; step: number; shown: Shown[] } | undefined;
 function shownAt(data: RiversData, step: number): Shown[] {
   if (shownCache?.data !== data || shownCache.step !== step) {
@@ -268,7 +293,8 @@ export const rivers = defineModule<RiversData>({
   // Le serveur relève toutes les 15 minutes : un redessin toutes les 5 minutes suffit, et recalcule les stations devenues muettes.
   timeStepMs: 300_000,
   followsTerrain: true,
-  zoomBreaks: [6, 8, 10.5],
+  // Les étiquettes sont désencombrées par demi-niveau de zoom (`declutter`).
+  zoomBreaks: [6, ...halfZoomBreaks(9)],
 
   legend() {
     const jour = sheet('jour');
@@ -304,9 +330,7 @@ export const rivers = defineModule<RiversData>({
     const chosenId = selection ? (selection as { id: string }).id : undefined;
     const chosen = shown.filter((s) => s.station.id === chosenId);
     const alerts = shown.filter((s) => s.station.vig);
-    const moving = shown.filter((s) => s.trend === 'fast-up' || s.trend === 'up' || s.trend === 'down');
-    const showChange = view.zoom >= 9;
-    const showName = view.zoom >= 10.5;
+    const labels = labelled(shown, view.zoom);
     const parameters = OVER_MAP;
     const alpha = (s: Shown) => (s.trend === 'none' ? 170 : 255);
     const ring = {
@@ -350,10 +374,10 @@ export const rivers = defineModule<RiversData>({
         updateTriggers: { getIcon: [step, theme], getColor: step, getPosition: terrain.version, getSize: size },
         parameters,
       }),
-      showChange &&
+      labels.changes.length > 0 &&
         new TextLayer<Shown>({
           id: 'rivieres/variations',
-          data: moving,
+          data: labels.changes,
           getPosition: onGround,
           getText: (s) => `${centimeters(s.station.d ?? 0)} / 3 h`,
           characterSet: 'auto',
@@ -375,10 +399,10 @@ export const rivers = defineModule<RiversData>({
           updateTriggers: { getText: step, getPosition: terrain.version, getPixelOffset: size },
           parameters,
         }),
-      showName &&
+      labels.names.length > 0 &&
         new TextLayer<Shown>({
           id: 'rivieres/noms',
-          data: shown,
+          data: labels.names,
           getPosition: onGround,
           getText: (s) => s.station.name,
           characterSet: 'auto',
