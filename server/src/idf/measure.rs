@@ -402,6 +402,29 @@ fn qualite_siri_idfm() {
                     let times: Vec<i64> = journey.calls.iter().filter_map(|c| c.aimed().or(c.expected())).collect();
                     let (first, last) = (times.iter().min().copied().unwrap_or(0), times.iter().max().copied().unwrap_or(0));
                     println!("   LIGNE {} : {} courses ; fenêtre [{}, {}]", journey.route, index.trips_of_route[route as usize].len(), first - at, last - at);
+                    // Le motif qui dessert le plus d'arrêts annoncés, à n'importe quelle heure.
+                    let mut best_served: Option<(usize, u32)> = None;
+                    let mut patterns_seen = HashSet::new();
+                    for &t in &index.trips_of_route[route as usize] {
+                        let trip = &schedule.trips[t as usize];
+                        if !patterns_seen.insert(trip.pattern) {
+                            continue;
+                        }
+                        let served = journey.calls.iter().filter(|c| index.position(trip, c, schedule.day_starts[1]).is_some()).count();
+                        if best_served.is_none_or(|(s, _)| served > s) {
+                            best_served = Some((served, t));
+                        }
+                    }
+                    if let Some((served, t)) = best_served {
+                        let trip = &schedule.trips[t as usize];
+                        let pattern = &schedule.patterns[trip.pattern as usize];
+                        let at_times: Vec<String> = journey
+                            .calls
+                            .iter()
+                            .filter_map(|c| index.position(trip, c, schedule.day_starts[1]).map(|i| format!("#{i}:siri{:+}/gtfs{:+}", c.expected().unwrap_or(0) - at, schedule.day_starts[1] + i64::from(schedule.times_of(trip, i).0) - at)))
+                            .collect();
+                        println!("   MEILLEUR_MOTIF {served}/{} desservis, motifs distincts={}, course {} ({} arrêts) : {}", journey.calls.len(), patterns_seen.len(), trip.id, pattern.stop.len(), at_times.join(" "));
+                    }
                     let mut shown = 0;
                     for &t in &index.trips_of_route[route as usize] {
                         let trip = &schedule.trips[t as usize];

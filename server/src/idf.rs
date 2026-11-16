@@ -76,6 +76,8 @@ const MAX_SCORE_AIMED_S: f64 = 120.0;
 const WINDOW_S: i64 = 900;
 /// Un décalage entre l'heure théorique d'une course trouvée par son identifiant et celle annoncée au-delà de cela : on s'en méfie.
 const MAX_DIRECT_GAP_S: i64 = 3 * 3600;
+/// Un appel dont l'écart avec l'horaire s'éloigne de plus de cela (s) de l'écart médian de sa circulation est écarté (voir `match_detailed`).
+const OUTLIER_S: i64 = 600;
 
 // ───────────────────────── Configuration ─────────────────────────
 
@@ -512,7 +514,7 @@ impl<'a> Index<'a> {
     fn score(&self, journey: &Journey, trip: &Trip, day: usize) -> Option<f64> {
         let day_start = self.schedule.day_starts[day];
         let mut gaps = Vec::with_capacity(journey.calls.len());
-        let mut found: Vec<(usize, i64)> = Vec::with_capacity(journey.calls.len());
+        let mut found: Vec<(usize, i64, f64)> = Vec::with_capacity(journey.calls.len());
         let mut resolvable = 0;
         for call in &journey.calls {
             let Some(target) = call.aimed().or(call.expected()) else { continue };
@@ -520,9 +522,10 @@ impl<'a> Index<'a> {
                 resolvable += 1;
             }
             if let Some(i) = self.position(trip, call, day_start) {
-                gaps.push((day_start + i64::from(self.schedule.times_of(trip, i).0) - target).abs() as f64);
+                let gap = (day_start + i64::from(self.schedule.times_of(trip, i).0) - target).abs() as f64;
+                gaps.push(gap);
                 if let Some(t) = call.expected() {
-                    found.push((i, t));
+                    found.push((i, t, gap));
                 }
             }
         }
@@ -531,7 +534,7 @@ impl<'a> Index<'a> {
             return None;
         }
         // Les heures annoncées doivent croître avec le rang des arrêts (sinon c'est l'autre sens de la ligne).
-        found.sort_unstable();
+        found.sort_unstable_by_key(|f| (f.0, f.1));
         let (mut pairs, mut inverted) = (0u32, 0u32);
         for a in 0..found.len() {
             for b in a + 1..found.len() {
@@ -542,6 +545,10 @@ impl<'a> Index<'a> {
             }
         }
         if pairs > 0 && f64::from(inverted) > 0.2 * f64::from(pairs) {
+            // Certains flux (les bus « MeC » : 40 % des bus du SIRI) mélangent dans une même circulation les passages de plusieurs
+            // véhicules : les heures ne croissent pas avec le rang, et aucune course ne peut être attribuée sans risque (essayé :
+            // retenir le plus grand sous-ensemble cohérent rapproche 2 % de bus de plus, sans qu'aucune vérité terrain permette de dire
+            // s'ils sont bien placés). Ces bus restent à l'horaire théorique.
             return None;
         }
         // Un seul arrêt annoncé : le sens vient du terminus.
@@ -686,11 +693,25 @@ pub fn match_detailed(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
         let Some((candidate, _)) = chosen else { continue };
         let trip = &schedule.trips[candidate.trip as usize];
         let day_start = schedule.day_starts[candidate.day];
-        let stops: Vec<StopUpdate> = journey
+        // Écart de chaque appel avec l'horaire de la course. Le SIRI contient des appels aberrants (un arrêt « passé » avec une heure sans rapport,
+        // 50 minutes d'écart quand les autres arrêts disent 2) : pris tels quels, ils figent le véhicule à son départ. On écarte ceux qui
+        // s'éloignent de plus de `OUTLIER_S` de l'écart médian de la circulation.
+        let placed: Vec<(&Call, usize, Option<i64>)> = journey
             .calls
             .iter()
             .filter_map(|call| {
                 let i = index.position(trip, call, day_start)?;
+                let gap = call.expected().map(|e| e - (day_start + i64::from(schedule.times_of(trip, i).0)));
+                Some((call, i, gap))
+            })
+            .collect();
+        let mut gaps: Vec<i64> = placed.iter().filter_map(|p| p.2).collect();
+        gaps.sort_unstable();
+        let median = (gaps.len() >= 3).then(|| gaps[gaps.len() / 2]);
+        let stops: Vec<StopUpdate> = placed
+            .into_iter()
+            .filter(|(_, _, gap)| median.is_none_or(|m| gap.is_none_or(|g| (g - m).abs() <= OUTLIER_S)))
+            .filter_map(|(call, i, _)| {
                 let pattern = &schedule.patterns[trip.pattern as usize];
                 // Avec l'heure théorique, le retard est exact ; sans elle, on donne l'heure prévue.
                 let event = |expected: Option<i64>, aimed: Option<i64>| match (expected, aimed) {
