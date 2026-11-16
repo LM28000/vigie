@@ -8,7 +8,8 @@ L'écran a quatre zones fixes. Au repos, elles couvrent moins de 15 % de la cart
   - une gare et ses départs ;
   - un train par son numéro ;
   - un vol, un navire, une ligne de bus ;
-  - une station de vélos, une borne, une couche, une scène ;
+  - une station de vélos, une borne, une webcam par son nom (« webcam Chamonix », « caméra Perrache », une fois la couche Caméras chargée), une couche, une scène ;
+  - un mode de vision (« vision thermique », « vision nocturne », « écran cathodique », « vision normale ») ;
   - une date (« demain 8h », « il y a 2 h », « direct »).
 - **Sous la recherche, les pastilles des couches affichées.** Un clic ouvre leurs réglages, la croix les masque. Le bouton « Couches » ouvre le catalogue, avec un filtre et des scènes prêtes à l'emploi (Ce qui bouge, Météo, Qualité de l'air, Énergie, Ma ville…) et la visite guidée.
 - **À droite, la fiche de l'objet choisi.** Elle montre :
@@ -52,7 +53,7 @@ Le bouton en forme d'œil, parmi les commandes de la carte (en bas à droite, au
 
 ### Visite guidée
 
-Une visite de trois minutes, douze étapes, jouée sur la vraie carte : les trains de France, Paris à l'heure de pointe (rejouée d'après l'enregistrement du serveur), un avion suivi à Roissy, le Pas-de-Calais, les isochrones depuis Paris avec la population à portée, les colonnes d'habitants, le prix du m², les zones blanches des Alpes, les élections, les photos aériennes des années 50 (le rideau glisse seul), le vent et la pluie, la nuit.
+Une visite de trois minutes, treize étapes, jouée sur la vraie carte : les trains de France, Paris à l'heure de pointe (rejouée d'après l'enregistrement du serveur), un avion suivi à Roissy, le Pas-de-Calais, les isochrones depuis Paris avec la population à portée, les colonnes d'habitants, le prix du m², les zones blanches des Alpes, les élections, les caméras de vidéoprotection de Paris (cônes de vision à l'échelle de la rue), les photos aériennes des années 50 (le rideau glisse seul), le vent et la pluie, la nuit.
 
 - **Pour la lancer** : bouton « Visite guidée » de l'accueil (première visite), en tête des scènes du catalogue des couches, commande « visite » de la recherche, ou lien avec `#visite` (le drapeau est retiré de l'adresse dès qu'il est lu).
 - **Commandes** : pause, étape précédente et suivante, `Espace` (pause), `←` `→` (étape), `Échap` (quitter). Glisser ou zoomer sur la carte met la visite en pause ; la reprise repart de l'étape. Avec `prefers-reduced-motion`, la caméra saute au lieu de voler.

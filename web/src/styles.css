@@ -988,6 +988,14 @@ p {
   line-height: 16px;
 }
 
+.info__image-caption a {
+  display: inline;
+  width: auto;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .info__table > .kicker {
   margin-bottom: var(--space-3);
 }

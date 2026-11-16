@@ -25,9 +25,12 @@ export function InfoImageView({ image }: { image: InfoImage }) {
       const url = fresh(image.src, stamp);
       const probe = new Image();
       probe.onload = () => {
-        if (cancelled) return;
-        setShown({ url, loadedAt: stamp });
-        setFailed(false);
+        // Décodée avant d'être montrée : une grande image (1920 px) ne s'affiche pas par bandes dans la fiche.
+        void (probe.decode ? probe.decode() : Promise.resolve()).catch(() => undefined).then(() => {
+          if (cancelled) return;
+          setShown({ url, loadedAt: stamp });
+          setFailed(false);
+        });
       };
       probe.onerror = () => {
         if (!cancelled) setFailed(true);
@@ -70,7 +73,17 @@ export function InfoImageView({ image }: { image: InfoImage }) {
           </span>
         )}
         {failed && shown && <span>Rechargement impossible, dernière image conservée.</span>}
-        {image.credit && <span>{image.credit}</span>}
+        {image.credit && (
+          <span>
+            {image.href ? (
+              <a href={image.href} target="_blank" rel="noreferrer">
+                {image.credit}
+              </a>
+            ) : (
+              image.credit
+            )}
+          </span>
+        )}
       </figcaption>
     </figure>
   );

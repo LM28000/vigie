@@ -14,6 +14,7 @@ import { layersProvider } from './layers';
 import { parseQuery } from './normalize';
 import { planesProvider } from './planes';
 import { shipsProvider } from './ships';
+import { webcamsProvider } from './webcams';
 import { trainsProvider } from './trains';
 import { transitProvider } from './transit';
 import { KIND_LABELS, KIND_ORDER, type Kind, type Provider, type SearchContext, type SearchResult } from './types';
@@ -26,6 +27,7 @@ const PROVIDERS: readonly Provider[] = [
   transitProvider,
   bikesProvider,
   chargersProvider,
+  webcamsProvider,
   layersProvider,
   commandsProvider,
 ];
@@ -80,5 +82,5 @@ export function arrange(results: readonly SearchResult[], filter: Kind | null): 
  * Un lieu ou une gare est plus souvent ce qu'on cherche qu'une borne parmi 53 000 :
  * à correspondance égale, les types passent dans cet ordre.
  */
-const KIND_BIAS: Record<Kind, number> = { lieu: 30, gare: 30, train: 10, avion: 10, navire: 0, reseau: 0, action: 0, velo: -40, borne: -50 };
+const KIND_BIAS: Record<Kind, number> = { lieu: 30, gare: 30, train: 10, avion: 10, navire: 0, reseau: 0, action: 0, velo: -40, borne: -50, webcam: -20 };
 const groupScore = (group: Group): number => group.results[0]!.score + KIND_BIAS[group.kind];

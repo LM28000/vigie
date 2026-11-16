@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 16 novembre 2026 — Webcams ouvertes, recherche de webcams et de modes de vision
+
+- **Webcams ouvertes** : 13 webcams d'Orléans Métropole et du littoral d'Anglet (data.gouv.fr, Licence Ouverte 2.0), position et page de la webcam sans image, `GET /api/webcams/ouvertes`, listes relues toutes les 6 h ; fiche avec source et licence. Les autres jeux examinés (Saint-Nazaire, déchèteries d'Orléans, caméras de comptage…) sont écartés et motivés dans [docs/couches.md](docs/couches.md#caméras--sources-et-choix).
+- **Fiche webcam** vérifiée sur la prod, ordinateur et téléphone : image décodée avant d'être montrée, mention « Windy Webcams » devenue un lien vers la page de la webcam, fiche ouverte à mi-hauteur sur téléphone quand elle porte une image.
+- **Recherche** : webcams par nom ou lieu (« webcam Chamonix »), modes de vision (« vision thermique », « écran cathodique »…).
+- **Visite guidée** : treizième étape « Les caméras de Paris » (cônes de vision, zoom 17 incliné), sautée sans données.
+
 ## 15 novembre 2026 — Avions militaires, brouillage GPS, modes de vision, caméras
 
 - **Avions militaires et d'État** : le drapeau `dbFlags` (bit 0) des réponses d'adsb.lol et d'adsb.fi est exposé (`military`), sans requête de plus. Silhouette et anneau sarcelle, mention dans la fiche, légende, réglage « Afficher : tous / militaires seulement ».

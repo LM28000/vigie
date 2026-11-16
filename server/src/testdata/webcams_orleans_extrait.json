@@ -1,0 +1,50 @@
+[
+ {
+  "id_webcam": "webcam-dechetterie-est",
+  "nom_webcam": "Webcam Déchetterie Est - Chécy",
+  "nom_court_webcam": "Déchetterie Est",
+  "description_webcam": "Vue de l’entrée de la déchetterie Est - Chécy",
+  "type": "webcam affluence",
+  "caracteristiques_webcam": "Vue en direct",
+  "url_webcam": "https://www.orleans-metropole.fr/dechets/tri-et-dechetteries?eID=citeos-flux&cam=checy-de",
+  "geo_point_webcam": null,
+  "id_equipement": "c287ac4c-0602-4480-a736-c69b4e368278",
+  "url_illustration": null,
+  "commune_equipement": "Chécy",
+  "adresse_complete_equipement": "Rue Pierre et Marie Curie 45430 Chécy"
+ },
+ {
+  "id_webcam": "webcam-beffroi",
+  "nom_webcam": "Webcam Beffroi",
+  "nom_court_webcam": "Beffroi",
+  "description_webcam": "Vue panoramique de la ville à partir du Beffroi (place Louis XI)",
+  "type": "webcam touristique",
+  "caracteristiques_webcam": "Vue 360° aux 10 minutes avec historique",
+  "url_webcam": "https://www.skaping.com/orleans/beffroi",
+  "geo_point_webcam": {
+   "lon": 1.9060649003061583,
+   "lat": 47.90034114585489
+  },
+  "id_equipement": null,
+  "url_illustration": "/assets/theme_image/webcam-beffroi.png",
+  "commune_equipement": "Orléans",
+  "adresse_complete_equipement": null
+ },
+ {
+  "id_webcam": "webcam-place-du-martroi",
+  "nom_webcam": "Webcam Place du Martroi",
+  "nom_court_webcam": "Martroi",
+  "description_webcam": "Vue live de la Place du Martroi",
+  "type": "webcam touristique",
+  "caracteristiques_webcam": "Vue en direct",
+  "url_webcam": "https://www.skaping.com/orleans/place-du-martroi/live/",
+  "geo_point_webcam": {
+   "lon": 1.9041176482446516,
+   "lat": 47.902126069647004
+  },
+  "id_equipement": null,
+  "url_illustration": "/assets/theme_image/webcam-martroi.png",
+  "commune_equipement": "Orléans",
+  "adresse_complete_equipement": null
+ }
+]

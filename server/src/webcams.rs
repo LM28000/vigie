@@ -1,4 +1,4 @@
-//! Webcams publiques avec image : deux sources, toutes deux publiées volontairement par leurs propriétaires.
+//! Webcams publiques : trois sources, toutes publiées volontairement par leurs propriétaires.
 //!
 //! - **Windy Webcams API v3** (<https://api.windy.com/webcams/docs>), avec la clé `WINDY_WEBCAMS_KEY`
 //!   (lue ici, jamais envoyée au navigateur ; sans elle, la source est désactivée et `/api/webcams/windy`
@@ -13,6 +13,10 @@
 //!   circulation dont l'image est renouvelée chaque minute ; la liste (positions, noms, heure de
 //!   l'image) est relue chaque minute sur le WFS de data.grandlyon.com, le navigateur charge
 //!   l'image directement sur `download.data.grandlyon.com`.
+//! - **Webcams ouvertes** : les jeux « Webcam - Orléans Métropole » et « Localisation des webcams - littoral
+//!   Anglet » (data.gouv.fr, Licence Ouverte 2.0) donnent la position et la page de la webcam (Skaping,
+//!   Viewsurf), pas d'image : la fiche renvoie vers cette page. Les listes sont statiques, relues toutes les
+//!   6 h (huit requêtes par jour au plus pour les deux jeux).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -56,6 +60,12 @@ const CRITER_URL: &str = "https://data.grandlyon.com/geoserver/metropole-de-lyon
 const CRITER_EVERY: Duration = Duration::from_secs(60);
 const CRITER_IMAGE_HOST: &str = "download.data.grandlyon.com";
 
+const ORLEANS_URL: &str = "https://data.orleans-metropole.fr/api/explore/v2.1/catalog/datasets/om-webcam-dispositif/exports/json";
+const ANGLET_URL: &str = "https://anglet-opendatapaysbasque.opendatasoft.com/api/explore/v2.1/catalog/datasets/20240325-webcam_64024-21640024200014_anglet/exports/json";
+/// Listes statiques : relues quatre fois par jour au plus.
+const OPEN_EVERY: Duration = Duration::from_secs(6 * 3600);
+const OPEN_RETRY: Duration = Duration::from_secs(30 * 60);
+
 // ---------------------------------------------------------------------------------------------
 // État partagé
 // ---------------------------------------------------------------------------------------------
@@ -67,6 +77,7 @@ struct Catalog {
 
 static CATALOG: RwLock<Option<Catalog>> = RwLock::new(None);
 static CRITER: RwLock<Option<Bytes>> = RwLock::new(None);
+static OPEN: RwLock<Option<Bytes>> = RwLock::new(None);
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 /// Liens d'image de Windy : identifiant → (lien, instant de la demande). Jamais plus de 8 minutes.
 static LINKS: Mutex<Option<HashMap<u64, (String, Instant)>>> = Mutex::new(None);
@@ -84,7 +95,8 @@ fn windy_key() -> Option<String> {
 pub fn spawn(http: reqwest::Client, data_dir: PathBuf) {
     let _ = CLIENT.set(http.clone());
     tokio::spawn(windy_catalog_forever(http.clone(), data_dir));
-    tokio::spawn(criter_forever(http));
+    tokio::spawn(criter_forever(http.clone()));
+    tokio::spawn(open_forever(http));
 }
 
 /// `GET /api/webcams/windy` : `{ "actif", "updatedAt", "webcams": [[id, lon, lat, titre, ville, lien Windy], …] }`.
@@ -104,6 +116,14 @@ pub fn criter_response() -> Response {
     match CRITER.read().expect("verrou de Criter").clone() {
         Some(body) => ([(header::CONTENT_TYPE, "application/json")], body).into_response(),
         None => (StatusCode::SERVICE_UNAVAILABLE, "caméras Criter : première lecture en cours").into_response(),
+    }
+}
+
+/// `GET /api/webcams/ouvertes` : `{ "updatedAt", "webcams": [[id, lon, lat, nom, commune, page, source], …] }`.
+pub fn open_response() -> Response {
+    match OPEN.read().expect("verrou des webcams ouvertes").clone() {
+        Some(body) => ([(header::CONTENT_TYPE, "application/json")], body).into_response(),
+        None => (StatusCode::SERVICE_UNAVAILABLE, "webcams ouvertes : première lecture en cours").into_response(),
     }
 }
 
@@ -487,6 +507,162 @@ async fn criter_once(http: &reqwest::Client) -> Result<usize> {
     Ok(count)
 }
 
+// ---------------------------------------------------------------------------------------------
+// Webcams ouvertes (Orléans Métropole, Anglet)
+// ---------------------------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct Point {
+    lon: f64,
+    lat: f64,
+}
+
+#[derive(Deserialize)]
+struct OrleansRow {
+    #[serde(default)]
+    id_webcam: String,
+    #[serde(default)]
+    nom_webcam: String,
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    url_webcam: String,
+    geo_point_webcam: Option<Point>,
+    #[serde(default)]
+    commune_equipement: String,
+}
+
+#[derive(Deserialize)]
+struct AngletRow {
+    #[serde(default)]
+    ogc_fid: String,
+    #[serde(default)]
+    nom: String,
+    #[serde(default)]
+    lien: String,
+    geo_point_2d: Option<Point>,
+}
+
+/// Une webcam ouverte : sa position et la page où la voir (pas d'image).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OpenCam {
+    pub id: u64,
+    pub lon: f64,
+    pub lat: f64,
+    pub name: String,
+    pub town: String,
+    pub page: String,
+    pub source: &'static str,
+}
+
+fn open_name(name: &str) -> String {
+    let name = name.trim();
+    truncate(name.strip_prefix("Webcam - ").or_else(|| name.strip_prefix("Webcam ")).unwrap_or(name), 80)
+}
+
+/// Seule une page https est gardée (le navigateur l'ouvre dans un nouvel onglet).
+fn https_page(url: &str) -> bool {
+    url.starts_with("https://") && !url.contains(char::is_whitespace)
+}
+
+/// Webcams touristiques d'Orléans Métropole qui ont une position et une page. Les webcams « d'affluence » des déchèteries
+/// (sans position, pages disparues) sont écartées. Identifiants : 2000 + rang dans l'ordre des identifiants du jeu.
+pub fn parse_orleans(bytes: &[u8]) -> Result<Vec<OpenCam>> {
+    let mut rows: Vec<OrleansRow> = serde_json::from_slice(bytes).context("webcams d'Orléans illisibles")?;
+    rows.sort_by(|a, b| a.id_webcam.cmp(&b.id_webcam));
+    Ok(rows
+        .into_iter()
+        .enumerate()
+        .filter(|(_, r)| r.kind == "webcam touristique" && https_page(&r.url_webcam))
+        .filter_map(|(i, r)| {
+            let point = r.geo_point_webcam?;
+            Some(OpenCam {
+                id: 2000 + i as u64,
+                lon: (point.lon * 1e5).round() / 1e5,
+                lat: (point.lat * 1e5).round() / 1e5,
+                name: open_name(&r.nom_webcam),
+                town: truncate(&r.commune_equipement, 50),
+                page: r.url_webcam,
+                source: "Orléans Métropole",
+            })
+        })
+        .collect())
+}
+
+/// Webcams du littoral d'Anglet (pages Viewsurf). Identifiants : 1000 + `ogc_fid`.
+pub fn parse_anglet(bytes: &[u8]) -> Result<Vec<OpenCam>> {
+    let rows: Vec<AngletRow> = serde_json::from_slice(bytes).context("webcams d'Anglet illisibles")?;
+    Ok(rows
+        .into_iter()
+        .filter(|r| https_page(&r.lien))
+        .filter_map(|r| {
+            let point = r.geo_point_2d?;
+            Some(OpenCam {
+                id: 1000 + r.ogc_fid.parse::<u64>().ok()?,
+                lon: (point.lon * 1e5).round() / 1e5,
+                lat: (point.lat * 1e5).round() / 1e5,
+                name: open_name(&r.nom),
+                town: "Anglet".to_string(),
+                page: r.lien,
+                source: "Commune d'Anglet",
+            })
+        })
+        .collect())
+}
+
+/// La réponse JSON : les webcams triées par identifiant.
+pub fn open_json(mut cams: Vec<OpenCam>, updated_at: i64) -> Result<Vec<u8>> {
+    if cams.is_empty() {
+        bail!("aucune webcam ouverte dans les réponses");
+    }
+    cams.sort_by_key(|c| c.id);
+    let rows: Vec<serde_json::Value> = cams.iter().map(|c| serde_json::json!([c.id, c.lon, c.lat, c.name, c.town, c.page, c.source])).collect();
+    Ok(serde_json::to_vec(&serde_json::json!({ "updatedAt": updated_at, "webcams": rows }))?)
+}
+
+async fn open_once(http: &reqwest::Client) -> Result<usize> {
+    let mut cams = Vec::new();
+    let mut failed = None;
+    // Chaque jeu à son tour : un jeu en panne ne retire pas l'autre.
+    for (url, parse) in [(ORLEANS_URL, parse_orleans as fn(&[u8]) -> Result<Vec<OpenCam>>), (ANGLET_URL, parse_anglet)] {
+        let result = async {
+            let bytes = http.get(url).timeout(Duration::from_secs(30)).send().await?.error_for_status()?.bytes().await?;
+            parse(&bytes)
+        }
+        .await;
+        match result {
+            Ok(found) => cams.extend(found),
+            Err(error) => failed = Some(error),
+        }
+    }
+    if let Some(error) = failed {
+        // Une liste partielle ne remplace pas une liste complète déjà en mémoire.
+        if OPEN.read().expect("verrou des webcams ouvertes").is_some() {
+            return Err(error);
+        }
+        warn!("webcams ouvertes : un jeu manque : {error:#}");
+    }
+    let body = open_json(cams, Timestamp::now().as_second())?;
+    let count = serde_json::from_slice::<serde_json::Value>(&body)?["webcams"].as_array().map_or(0, Vec::len);
+    *OPEN.write().expect("verrou des webcams ouvertes") = Some(Bytes::from(body));
+    Ok(count)
+}
+
+async fn open_forever(http: reqwest::Client) {
+    loop {
+        match open_once(&http).await {
+            Ok(count) => {
+                info!(webcams = count, "webcams ouvertes : lues");
+                tokio::time::sleep(OPEN_EVERY).await;
+            }
+            Err(error) => {
+                warn!("webcams ouvertes indisponibles : {error:#}");
+                tokio::time::sleep(OPEN_RETRY).await;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -570,5 +746,43 @@ mod tests {
         assert_eq!(cameras[0][7], "2026-11-15T15:06:30Z".parse::<Timestamp>().unwrap().as_second());
         assert_eq!(cameras[1][0], 220);
         assert!(convert_criter(br#"{"features":[]}"#, 0).is_err());
+    }
+
+    #[test]
+    fn webcams_dorleans_touristiques_avec_position() {
+        let cams = parse_orleans(include_str!("testdata/webcams_orleans_extrait.json").as_bytes()).unwrap();
+        // Trois lignes : une webcam de déchèterie (sans position, écartée) et deux webcams touristiques.
+        assert_eq!(cams.len(), 2);
+        let beffroi = cams.iter().find(|c| c.name == "Beffroi").unwrap();
+        assert_eq!(beffroi.page, "https://www.skaping.com/orleans/beffroi");
+        assert_eq!(beffroi.source, "Orléans Métropole");
+        assert!((beffroi.lon - 1.90606).abs() < 1e-9 && (beffroi.lat - 47.90034).abs() < 1e-9);
+        assert_eq!(beffroi.town, "Orléans");
+        assert!(cams.iter().all(|c| c.id >= 2000));
+    }
+
+    #[test]
+    fn webcams_danglet_pages_viewsurf() {
+        let cams = parse_anglet(include_str!("testdata/webcams_anglet_extrait.json").as_bytes()).unwrap();
+        assert_eq!(cams.len(), 3);
+        assert_eq!(cams[0].id, 1004);
+        assert_eq!(cams[0].name, "Panoramique Sables d’Or – Marinella – Corsaires");
+        assert!(cams[0].page.starts_with("https://pv.viewsurf.com/"));
+        assert_eq!(cams[0].town, "Anglet");
+        // Une page qui n'est pas en https n'est pas gardée.
+        let json = r#"[{"ogc_fid":"9","nom":"x","lien":"http://exemple.org","geo_point_2d":{"lon":1.0,"lat":2.0}}]"#;
+        assert!(parse_anglet(json.as_bytes()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn webcams_ouvertes_reponse_triee() {
+        let mut cams = parse_orleans(include_str!("testdata/webcams_orleans_extrait.json").as_bytes()).unwrap();
+        cams.extend(parse_anglet(include_str!("testdata/webcams_anglet_extrait.json").as_bytes()).unwrap());
+        let json: serde_json::Value = serde_json::from_slice(&open_json(cams, 7).unwrap()).unwrap();
+        let rows = json["webcams"].as_array().unwrap();
+        assert_eq!(rows.len(), 5);
+        assert!(rows.windows(2).all(|w| w[0][0].as_u64() < w[1][0].as_u64()));
+        assert_eq!(rows[0][6], "Commune d'Anglet");
+        assert!(open_json(Vec::new(), 0).is_err());
     }
 }

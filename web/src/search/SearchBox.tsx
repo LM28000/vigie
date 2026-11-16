@@ -478,6 +478,13 @@ const ICONS: Record<Kind, ReactNode> = {
     </>
   ),
   borne: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z" />,
+  webcam: (
+    <>
+      <rect x="3.5" y="7" width="17" height="11.5" rx="2.5" />
+      <path d="M8.5 7 10 4.5h4L15.5 7" />
+      <circle cx="12" cy="12.7" r="3" />
+    </>
+  ),
   action: (
     <>
       <path d="M5 12h14M13 6l6 6-6 6" />
