@@ -17,7 +17,7 @@ import { geoidUndulation } from '../map/geoid';
 const SEA_LEVEL = 'photorealSeaLevel';
 
 /** Décalage vertical du maillage par rapport au relief de MapLibre, en mètres (positif : vers le haut). Voir docs/rendu-3d.md. */
-export const MESH_LIFT_M = 0;
+export const MESH_LIFT_M = 4;
 
 export class SeaLevelScenegraphLayer extends ScenegraphLayer<number> {
   static override layerName = 'SeaLevelScenegraphLayer';
