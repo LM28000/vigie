@@ -73,6 +73,15 @@ La première suffit : les quatre rendus se décrivent comme des matrices de coul
 
 **Mesures** : voir [Performances](#performances).
 
+## Vue photoréaliste
+
+Réglage facultatif (module `photoreal`) : les Google Photorealistic 3D Tiles, servis par Cesium ion (actif 2275207) et dessinés par un `Tile3DLayer` de deck.gl, remplacent les bâtiments extrudés et leurs ombres. Il demande `CESIUM_ION_TOKEN` côté serveur (voir [déploiement](deploiement.md)).
+
+- **Altitude.** Les tuiles comptent au-dessus de l'ellipsoïde WGS84, le reste de la carte au-dessus du niveau de la mer : l'origine de chaque tuile est abaissée de l'ondulation du géoïde (`web/src/map/geoid.ts`, 43 à 57 m en France). `MESH_LIFT_M` (`photorealLayer.ts`, 0 par défaut) permet un dernier ajustement vertical en mètres.
+- **Lumière.** Les photos sont déjà éclairées : affichage à plat, sans rééclairage ; la nuit est un simple assombrissement.
+- **Décodeur Draco** servi par le site (`web/public/draco/`, copié de `@loaders.gl/draco`) : aucune requête vers gstatic.com ou un CDN. À recopier si `@loaders.gl` change de version majeure.
+- **Droits d'auteur.** Les mentions lues dans le glTF de chaque tuile sont affichées.
+
 ## Pièges connus
 
 - **MapLibre est volontairement en version 5.** deck.gl 9.4 utilise des éléments internes de MapLibre que la version 6 a renommés : la carte plante dès que le relief 3D est actif. Il faudra repasser en v6 quand deck.gl la prendra en charge.

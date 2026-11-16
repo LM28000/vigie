@@ -2,6 +2,10 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 17 novembre 2026 — Vue photoréaliste
+
+- **Vue photoréaliste** (réglage facultatif) : Google Photorealistic 3D Tiles via Cesium ion, `Tile3DLayer` deck.gl, altitudes ramenées au niveau de la mer par le géoïde, affichage à plat, nuit par assombrissement. Jeton `CESIUM_ION_TOKEN` gardé sur le serveur (`GET /api/photoreal/endpoint`). Décodeur Draco hébergé par le site ([docs/rendu-3d.md](docs/rendu-3d.md#vue-photoréaliste)).
+
 ## 16 novembre 2026 — Bus d'Île-de-France activés
 
 - **Bus d'Île-de-France activés par défaut** (`IDFM_MODES=metro,tram,train,cable,bus`, retirables) : ≈ +45 Mo en permanence, pire cumulé estimé à 805 Mo avec les tuiles, sous le seuil de 850 Mo ([mesures](docs/couches.md#bus-dîle-de-france--mesures-et-décision)).

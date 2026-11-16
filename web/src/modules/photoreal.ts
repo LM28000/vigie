@@ -22,6 +22,9 @@ import { setPhotorealShown } from '../map/baseMap';
 import './photoreal.css';
 import { SeaLevelScenegraphLayer, Tile3DLayer, tileCopyright } from './photorealLayer';
 
+/** Décodeur Draco servi par le site (public/draco/) : loaders.gl irait sinon le chercher chez gstatic.com. */
+const DRACO_MODULES = { 'draco_wasm_wrapper.js': '/draco/draco_wasm_wrapper.js', 'draco_decoder.wasm': '/draco/draco_decoder.wasm' };
+
 interface Attribution {
   html: string;
   collapsible?: boolean;
@@ -244,7 +247,7 @@ export const photoreal = defineModule<PhotorealData>({
         id: `${LAYER_PREFIX}/tuiles-${detail}`,
         data: ctx.data.url,
         pickable: false,
-        loadOptions: { tileset: { maximumScreenSpaceError: options.sse, maximumMemoryUsage: options.mb, maxRequests: options.requests } },
+        loadOptions: { modules: DRACO_MODULES, tileset: { maximumScreenSpaceError: options.sse, maximumMemoryUsage: options.mb, maxRequests: options.requests } },
         onTilesetLoad: (loaded) => onTilesetLoad(loaded as unknown as TilesetLike),
         onTileError: (tile, message) => console.warn('[photoreal] tuile en erreur', message, tile.id),
         // La nuit est un simple assombrissement : voir `nightTint`.
