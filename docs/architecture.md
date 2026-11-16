@@ -59,6 +59,7 @@ flowchart LR
 | `planes.rs`, `ships.rs`, `satellites.rs` | Avions (adsb.lol, drapeau militaire compris), navires (aisstream, WebSocket), éléments orbitaux (CelesTrak). |
 | `jamming.rs` | Brouillage GPS estimé : grille de 0,5° sur 20 min, alimentée par les réponses des avions. |
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
+| `parkings.rs` | Places libres des parkings de 9 agglomérations (portails ouverts), format commun et historique de 24 h. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |

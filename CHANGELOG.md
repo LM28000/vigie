@@ -2,6 +2,11 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 16 novembre 2026 — Parkings en direct
+
+- **Parkings** (Transports) : places libres de 257 parkings et parcs relais de 9 agglomérations (Rennes, Nantes, Strasbourg, Bordeaux, Clermont-Ferrand, Tours, Aix-Marseille, Orléans, Grenoble), en Licence Ouverte ou ODbL, sans compte. Le serveur (`server/src/parkings.rs`) relève chaque source toutes les 5 minutes, unifie les formats (un décodeur testé par source), garde 24 h de places libres par parking pour la courbe de la fiche (`GET /api/parkings`, `GET /api/parkings/courbe`). Site : disque par agglomération de loin, jauge de places libres de près, « Complet » barré de blanc, donnée de plus de 30 min en gris, rampe `parking-1` à `parking-4` validée jour et nuit, recherche, légende. Sources écartées et raisons : [docs/couches.md](docs/couches.md#parkings--sources-et-choix).
+- Fiche : la courbe accepte un compte (`integer`, axe depuis 0) et un pas d'heures (`hourStep`).
+
 ## 16 novembre 2026 — Foudre en direct, webcams ouvertes, recherche de webcams et de modes de vision
 
 - **Foudre en direct** (Ciel et espace) : les éclairs des 45 dernières minutes vus du satellite MTG (imageur d'éclairs LI), lus directement par le navigateur sur le service ouvert EUMETView (EUMETSAT, sans compte ni clé), recolorés dans une rampe jaune d'or validée (`ECLAIR`, jour et nuit) et d'autant plus transparents qu'ils sont anciens ; fondu à l'arrivée d'une image (coupé avec `prefers-reduced-motion`) ; relecture du passé possible (archive depuis mai 2025). Blitzortung.org écarté (conditions de réutilisation).

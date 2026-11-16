@@ -24,6 +24,7 @@ import { jamming } from './jamming';
 import { lightning } from './lightning';
 import { lidar } from './lidar';
 import { monuments } from './monuments';
+import { parkings } from './parkings';
 import { planes } from './planes';
 import { population } from './population';
 import { power } from './power';
@@ -39,7 +40,7 @@ import { weatherAlerts } from './weatherAlerts';
 import { wind } from './wind';
 
 export const MODULES: LayerModule[] = [
-  trains, railways, isochrones, traffic, planes, ships, transit, bikes,
+  trains, railways, isochrones, traffic, planes, ships, transit, bikes, parkings,
   floods, tides, weatherAlerts, air, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections,
   dayNight, buildingShadows, satellites, jamming, rain, lightning, wind,
