@@ -16,7 +16,6 @@ import { sunEffects } from '../models/sunLight';
 import {
   BASE_STYLE_URL,
   INITIAL_VIEW,
-  TERRAIN_EXAGGERATION,
   isTerrainSource,
   terrainOptions,
   ignoreMissingIcons,
@@ -66,7 +65,7 @@ export function MapView({ manager }: { manager: ModuleManager }) {
     map.addControl(new AttributionControl(), 'bottom-right'); // placé en bas de l'écran par le CSS
     map.addControl(new CalmScaleControl({ maxWidth: 110 }), 'bottom-right');
     // Le bouton relief réactive le relief avec la source du moment (ordinaire ou LiDAR HD, voir `setLidarTerrain`).
-    map.addControl(new TerrainControl({ get source() { return terrainOptions().source; }, exaggeration: TERRAIN_EXAGGERATION }), 'bottom-right');
+    map.addControl(new TerrainControl({ get source() { return terrainOptions().source; }, get exaggeration() { return terrainOptions().exaggeration; } }), 'bottom-right');
     map.addControl(new GlobeControl(), 'bottom-right');
     map.addControl(new NavigationControl({ visualizePitch: true }), 'bottom-right');
     keepGlobeAndTerrainApart(map);
