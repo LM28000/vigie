@@ -84,6 +84,8 @@ const SERIES_MAX_POINTS: usize = 300;
 const FRANCE: (f64, f64, f64, f64) = (-5.6, 41.2, 10.0, 51.4);
 
 static LIVE: RwLock<Option<Bytes>> = RwLock::new(None);
+/// Tronçons Vigicrues en vigilance jaune ou plus, pour la synthèse « Aujourd'hui » (rien de plus n'est demandé à Vigicrues).
+static FLOODS: RwLock<Option<(i64, Vec<FloodSection>)>> = RwLock::new(None);
 /// Codes des stations publiées : la route des courbes ne relaie que celles-là.
 static KNOWN: RwLock<Option<HashSet<String>>> = RwLock::new(None);
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -137,6 +139,9 @@ struct VigicruesFeature {
 
 #[derive(Deserialize)]
 struct VigicruesProperties {
+    /// Identifiant du tronçon (celui que le site relit pour ouvrir sa fiche).
+    #[serde(default)]
+    id: serde_json::Value,
     lbentcru: String,
     /// Le niveau est parfois un nombre, parfois un texte.
     #[serde(rename = "NivInfViCr")]
@@ -150,9 +155,47 @@ struct VigicruesGeometry {
 
 /// Un tronçon en vigilance jaune, orange ou rouge.
 struct Section {
+    id: String,
     name: String,
     level: u8,
     lines: Vec<Vec<[f64; 2]>>,
+}
+
+/// Un tronçon en vigilance, tel que le lit la synthèse « Aujourd'hui » : identifiant, nom, niveau (2 jaune, 3 orange, 4 rouge)
+/// et un point de son tracé.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct FloodSection {
+    pub id: String,
+    pub name: String,
+    pub level: u8,
+    pub lon: f64,
+    pub lat: f64,
+}
+
+/// Le point au milieu du plus long morceau du tracé (au sens du nombre de sommets) : assez juste pour y poser la caméra.
+fn middle_of(lines: &[Vec<[f64; 2]>]) -> Option<[f64; 2]> {
+    let line = lines.iter().max_by_key(|l| l.len())?;
+    line.get(line.len() / 2).copied()
+}
+
+fn flood_sections(sections: &[Section]) -> Vec<FloodSection> {
+    sections
+        .iter()
+        .filter_map(|s| {
+            let [lon, lat] = middle_of(&s.lines)?;
+            Some(FloodSection { id: s.id.clone(), name: s.name.clone(), level: s.level, lon: round5(lon), lat: round5(lat) })
+        })
+        .collect()
+}
+
+/// Les tronçons en vigilance au dernier bulletin relevé (avec l'instant du relevé, en secondes UTC), ou `None` avant le premier.
+pub fn floods() -> Option<(i64, Vec<FloodSection>)> {
+    FLOODS.read().expect("verrou des tronçons Vigicrues").clone()
+}
+
+/// La réponse déjà prête de `/api/rivieres`.
+pub fn live() -> Option<Bytes> {
+    LIVE.read().expect("verrou des rivières").clone()
 }
 
 // --- État du relevé ---
@@ -222,6 +265,15 @@ fn level_of(value: &serde_json::Value) -> u8 {
     }
 }
 
+/// Un identifiant que le service écrit tantôt en nombre, tantôt en texte.
+fn text_of(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Number(n) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
 fn in_france(lon: f64, lat: f64) -> bool {
     lon >= FRANCE.0 && lat >= FRANCE.1 && lon <= FRANCE.2 && lat <= FRANCE.3
 }
@@ -287,7 +339,7 @@ fn decode_vigicrues(body: &[u8]) -> Result<Vec<Section>> {
         .into_iter()
         .filter_map(|f| {
             let level = level_of(&f.properties.level);
-            (level >= 2).then_some(Section { name: f.properties.lbentcru, level, lines: f.geometry.coordinates })
+            (level >= 2).then_some(Section { id: text_of(&f.properties.id), name: f.properties.lbentcru, level, lines: f.geometry.coordinates })
         })
         .collect())
 }
@@ -406,6 +458,7 @@ pub async fn poll_forever(http: reqwest::Client) {
         if sections_at.is_none_or(|at| at.elapsed() >= VIGICRUES_EVERY) {
             match get_bytes(&http, VIGICRUES_URL).await.and_then(|b| decode_vigicrues(&b)) {
                 Ok(found) => {
+                    *FLOODS.write().expect("verrou des tronçons Vigicrues") = Some((Timestamp::now().as_second(), flood_sections(&found)));
                     sections = found;
                     sections_at = Some(Instant::now());
                 }

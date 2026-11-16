@@ -10,13 +10,16 @@ interface LayerChipsProps {
   /** Bouton « Couches ». */
   onOpenCatalog: () => void;
   catalogOpen: boolean;
+  /** Bouton « Aujourd'hui » (ordinateur : sur téléphone, il est dans la feuille). */
+  onToggleToday?: () => void;
+  todayOpen?: boolean;
 }
 
 /**
  * Pastilles des couches affichées : échantillon de couleur, nom, compteur court si le résumé
  * en donne un, et une croix pour masquer. Un clic sur la pastille ouvre ses réglages.
  */
-export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen }: LayerChipsProps) {
+export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen, onToggleToday, todayOpen }: LayerChipsProps) {
   const states = useModuleStates(manager);
   const shown = manager.modules.filter((module) => states[module.id]?.visible);
 
@@ -60,6 +63,12 @@ export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen }:
         <Icon name="layers" size={16} />
         Couches
       </button>
+      {onToggleToday && (
+        <button type="button" className="chip chip--today" aria-pressed={!!todayOpen} onClick={onToggleToday} title="Aujourd’hui en France : ce qui compte en ce moment (A)">
+          <Icon name="aujourdhui" size={16} />
+          Aujourd’hui
+        </button>
+      )}
     </div>
   );
 }

@@ -56,6 +56,7 @@ mod relief_lidar;
 mod ships;
 mod satellites;
 mod state;
+mod synthese;
 mod tiles;
 mod tides;
 mod timetable;

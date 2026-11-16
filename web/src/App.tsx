@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { clock } from './core/clock';
 import { ModuleManager } from './core/moduleManager';
 import { applySharedState, clearTourFlag, hasSharedState, hasTourFlag, startSharedStateSync } from './core/shareState';
+import { synthese, useSyntheseOpen } from './core/synthese';
 import { tour } from './core/tour';
 import { MapView } from './map/MapView';
 import { MODULES } from './modules';
@@ -10,6 +11,7 @@ import { InfoPanel } from './ui/InfoPanel';
 import { LayerChips } from './ui/LayerChips';
 import { LayerDrawer } from './ui/LayerDrawer';
 import { MobileSheet, type Snap } from './ui/MobileSheet';
+import { SyntheseView } from './ui/Synthese';
 import { TimeBar } from './ui/TimeBar';
 import { VisionControl } from './ui/VisionControl';
 import { ZoneTool } from './ui/ZoneTool';
@@ -33,7 +35,9 @@ export function App() {
   const phone = useMediaQuery(PHONE_QUERY);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [snap, setSnap] = useState<Snap>('peek');
+  const todayOpen = useSyntheseOpen();
+  // Une adresse `#synthese=1` rouvre la synthèse : sur téléphone, la feuille démarre à moitié ouverte pour la montrer.
+  const [snap, setSnap] = useState<Snap>(() => (phone && synthese.getSnapshot() ? 'half' : 'peek'));
   const [welcome, setWelcome] = useState(showWelcomeAtStart);
 
   useEffect(() => startSharedStateSync(manager), []);
@@ -52,29 +56,46 @@ export function App() {
     setWelcome(false);
     setDrawerOpen(false);
     setSnap('peek');
+    synthese.set(false);
   }, [tourState.active]);
+
+  // Sur téléphone la synthèse vit dans la feuille : feuille réduite, synthèse fermée (l'adresse ne la dirait pas ouverte pour rien).
+  useEffect(() => {
+    if (phone && snap === 'peek') synthese.set(false);
+  }, [phone, snap]);
 
   /** « Couches » : le tiroir sur ordinateur, la moitié de la feuille sur téléphone. */
   const openLayers = useCallback(
     (layerId?: string) => {
       if (layerId) setExpandedId(layerId);
+      synthese.set(false);
       if (phone) setSnap((current) => (current === 'peek' ? 'half' : current));
       else setDrawerOpen(true);
     },
     [phone],
   );
   const toggleLayers = useCallback(() => {
+    synthese.set(false);
     if (phone) setSnap((current) => (current === 'peek' ? 'half' : 'peek'));
     else setDrawerOpen((open) => !open);
   }, [phone]);
+  /** « Aujourd'hui » : un panneau à la place du catalogue sur ordinateur, un onglet de la feuille sur téléphone. */
+  const toggleToday = useCallback(() => {
+    if (synthese.getSnapshot() && !(phone && snap === 'peek')) return synthese.set(false);
+    synthese.set(true);
+    setDrawerOpen(false);
+    if (phone) setSnap((current) => (current === 'peek' ? 'half' : current));
+  }, [phone, snap]);
 
   useShortcuts({
     toggleLayers,
+    toggleToday,
     // Échap ferme ce qui est ouvert, du plus récent au plus ancien : accueil, couches, fiche.
     close: () => {
       if (tour.isActive()) return tour.quit();
       if (welcome) return setWelcome(false);
       if (phone && snap !== 'peek') return setSnap(snap === 'full' ? 'half' : 'peek');
+      if (!phone && todayOpen) return synthese.set(false);
       if (!phone && drawerOpen) return setDrawerOpen(false);
       manager.setSelection(null, null);
     },
@@ -105,8 +126,15 @@ export function App() {
           onOpenLayer={(id) => openLayers(id)}
           onOpenCatalog={phone ? toggleLayers : () => (drawerOpen ? setDrawerOpen(false) : openLayers())}
           catalogOpen={phone ? snap !== 'peek' : drawerOpen}
+          onToggleToday={phone ? undefined : toggleToday}
+          todayOpen={todayOpen}
         />
-        {!phone && drawerOpen && (
+        {!phone && todayOpen && (
+          <aside className="panel drawer today-panel" aria-label="Aujourd’hui en France">
+            <SyntheseView manager={manager} phone={false} onPicked={() => undefined} onClose={() => synthese.set(false)} />
+          </aside>
+        )}
+        {!phone && drawerOpen && !todayOpen && (
           <LayerDrawer manager={manager} expandedId={expandedId} onExpand={setExpandedId} onClose={() => setDrawerOpen(false)} />
         )}
       </div>
@@ -114,7 +142,16 @@ export function App() {
       {phone && tourState.active ? (
         <TourPanel manager={manager} phone />
       ) : phone ? (
-        <MobileSheet manager={manager} snap={snap} onSnap={setSnap} expandedId={expandedId} onExpand={setExpandedId} />
+        <MobileSheet
+          manager={manager}
+          snap={snap}
+          onSnap={setSnap}
+          expandedId={expandedId}
+          onExpand={setExpandedId}
+          todayOpen={todayOpen}
+          onToday={(open) => synthese.set(open)}
+          onTodayPicked={() => setSnap('peek')}
+        />
       ) : (
         <>
           <InfoPanel manager={manager} />
@@ -132,10 +169,10 @@ export function App() {
 }
 
 /**
- * Raccourcis : Espace lecture/pause · ← → −1 h/+1 h · L couches · Échap fermer. Pendant la visite guidée : Espace pause, ← → étape, Échap quitte.
+ * Raccourcis : Espace lecture/pause · ← → −1 h/+1 h · L couches · A aujourd'hui en France · Échap fermer. Pendant la visite guidée : Espace pause, ← → étape, Échap quitte.
  * (⌘K et / appartiennent à la recherche ; V, les modes de vision, est géré par `ui/VisionControl.tsx`.) Ils n'agissent pas quand un champ de saisie a le focus.
  */
-function useShortcuts({ toggleLayers, close }: { toggleLayers: () => void; close: () => void }) {
+function useShortcuts({ toggleLayers, toggleToday, close }: { toggleLayers: () => void; toggleToday: () => void; close: () => void }) {
   useEffect(() => {
     const typing = (target: EventTarget | null) =>
       target instanceof HTMLElement && !!target.closest('input:not([type="range"]), textarea, select, [contenteditable="true"]');
@@ -171,6 +208,9 @@ function useShortcuts({ toggleLayers, close }: { toggleLayers: () => void; close
       } else if (event.key === 'l' || event.key === 'L') {
         event.preventDefault(); // sinon la lettre atterrit dans le filtre qui prend le focus à l'ouverture
         toggleLayers();
+      } else if (event.key === 'a' || event.key === 'A') {
+        event.preventDefault();
+        toggleToday();
       }
     };
 
@@ -180,5 +220,5 @@ function useShortcuts({ toggleLayers, close }: { toggleLayers: () => void; close
       window.removeEventListener('keydown', onArrow, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [toggleLayers, close]);
+  }, [toggleLayers, toggleToday, close]);
 }

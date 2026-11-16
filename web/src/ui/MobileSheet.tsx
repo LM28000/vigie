@@ -5,6 +5,7 @@ import { useClockState, useClockTime, useSelectionInfo } from './hooks';
 import { Icon } from './icons';
 import { InfoBody, InfoSummary } from './InfoPanel';
 import { LayerCatalog } from './LayerDrawer';
+import { SyntheseView } from './Synthese';
 import { LivePill, TimeBar } from './TimeBar';
 
 export type Snap = 'peek' | 'half' | 'full';
@@ -44,19 +45,27 @@ interface MobileSheetProps {
   onSnap: (snap: Snap) => void;
   expandedId: string | null;
   onExpand: (id: string | null) => void;
+  /** Onglet « Aujourd'hui » (la synthèse) ouvert ou non, et son changement. */
+  todayOpen: boolean;
+  onToday: (open: boolean) => void;
+  /** Un clic sur une ligne de la synthèse : la feuille se réduit pour laisser voir la carte. */
+  onTodayPicked: () => void;
 }
 
 /**
  * Feuille du téléphone, tirée du bas. Trois hauteurs : poignée (fiche résumée ou heure),
  * moitié (fiche ou catalogue, et frise compacte), plein écran. On la tire au doigt.
  */
-export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand }: MobileSheetProps) {
+export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, todayOpen, onToday, onTodayPicked }: MobileSheetProps) {
   const { selection, info } = useSelectionInfo(manager);
   const [tab, setTab] = useState<'fiche' | 'couches'>('couches');
   const [viewport, setViewport] = useState(() => window.innerHeight);
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   const drag = useRef<DragState | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
+
+  /** Ce que la feuille montre : la synthèse si elle est ouverte, sinon la fiche de l'objet (onglet choisi) ou le catalogue. */
+  const view: 'fiche' | 'couches' | 'aujourdhui' = todayOpen ? 'aujourdhui' : selection && info && tab === 'fiche' ? 'fiche' : 'couches';
 
   const peek = selection ? PEEK_HEIGHT_WITH_SELECTION : PEEK_HEIGHT;
   const heights: Record<Snap, number> = { peek, half: Math.round(viewport * 0.56), full: viewport - FULL_TOP_GAP };
@@ -87,6 +96,7 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand }: Mob
   const openedFor = useRef('');
   useEffect(() => {
     setTab(selectionKey ? 'fiche' : 'couches');
+    if (selectionKey) onToday(false);
     if (selectionKey && hasImage && openedFor.current !== selectionKey) onSnap('half');
     openedFor.current = selectionKey && hasImage ? selectionKey : '';
   }, [selectionKey, hasImage]);
@@ -210,28 +220,63 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand }: Mob
           onKeyDown={onHandleKey}
         />
         {snap === 'peek' ? (
-          <PeekRow manager={manager} info={info} hasSelection={!!selection} onOpen={() => onSnap('half')} />
-        ) : selection && info ? (
+          <PeekRow
+            manager={manager}
+            info={info}
+            hasSelection={!!selection}
+            onOpen={() => {
+              onToday(false);
+              onSnap('half');
+            }}
+            onOpenToday={() => {
+              onToday(true);
+              onSnap('half');
+            }}
+          />
+        ) : (
           <div className="sheet__tabs" role="tablist" aria-label="Contenu de la feuille">
-            <button type="button" role="tab" aria-selected={tab === 'fiche'} className="sheet__tab" onClick={() => setTab('fiche')}>
-              Fiche
-            </button>
-            <button type="button" role="tab" aria-selected={tab === 'couches'} className="sheet__tab" onClick={() => setTab('couches')}>
+            {selection && info && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'fiche'}
+                className="sheet__tab"
+                onClick={() => {
+                  onToday(false);
+                  setTab('fiche');
+                }}
+              >
+                Fiche
+              </button>
+            )}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'couches'}
+              className="sheet__tab"
+              onClick={() => {
+                onToday(false);
+                setTab('couches');
+              }}
+            >
               Couches
             </button>
+            <button type="button" role="tab" aria-selected={view === 'aujourdhui'} className="sheet__tab" onClick={() => onToday(true)}>
+              Aujourd’hui
+            </button>
           </div>
-        ) : (
-          <h2 className="sheet__title">Couches</h2>
         )}
       </div>
 
       {snap !== 'peek' && (
         <>
-          <div className={`sheet__body${selection && info && tab === 'fiche' ? '' : ' sheet__body--catalog'}`}>
-            {selection && info && tab === 'fiche' ? (
+          <div className={`sheet__body${view === 'couches' ? ' sheet__body--catalog' : ''}`}>
+            {view === 'fiche' && selection && info ? (
               <div className="sheet__fiche">
                 <InfoBody manager={manager} selection={selection} info={info} />
               </div>
+            ) : view === 'aujourdhui' ? (
+              <SyntheseView manager={manager} phone onPicked={onTodayPicked} />
             ) : (
               <LayerCatalog manager={manager} expandedId={expandedId} onExpand={onExpand} />
             )}
@@ -251,11 +296,13 @@ function PeekRow({
   info,
   hasSelection,
   onOpen,
+  onOpenToday,
 }: {
   manager: ModuleManager;
   info: ReturnType<ModuleManager['describeSelection']>;
   hasSelection: boolean;
   onOpen: () => void;
+  onOpenToday: () => void;
 }) {
   const { live } = useClockState();
   const time = useClockTime(1_000);
@@ -279,6 +326,9 @@ function PeekRow({
       <button type="button" className="chip chip--add" onClick={onOpen}>
         <Icon name="layers" size={16} />
         Couches
+      </button>
+      <button type="button" className="chip chip--today chip--icon" onClick={onOpenToday} aria-label="Aujourd’hui en France" title="Aujourd’hui en France">
+        <Icon name="aujourdhui" size={18} />
       </button>
     </div>
   );

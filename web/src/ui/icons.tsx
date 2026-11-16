@@ -20,6 +20,11 @@ const PATHS: Record<string, string> = {
   external: 'M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4',
   check: 'm5 12.5 4.5 4.5L19 7.5',
   clock: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 8v4l3 2',
+  refresh: 'M19.5 11a7.5 7.5 0 0 0-13.4-3.5M5 4v3.5h3.5M4.5 13a7.5 7.5 0 0 0 13.4 3.5M19 20v-3.5h-3.5',
+  // « Aujourd'hui » : un soleil levé sur l'horizon.
+  aujourdhui: 'M4 18h16M7 18a5 5 0 0 1 10 0M12 5v2.5M5.2 9.2l1.8 1.8M18.8 9.2 17 11M3 14h1.5M19.5 14H21',
+  rivieres: 'M3 18c3-2.5 6 2.5 9 0s6 2.5 9 0M12 14V4M8.5 7.5 12 4l3.5 3.5',
+  'brouillage-gps': 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM6.3 6.3l11.4 11.4M12 9v.01',
   // Couches (une par module)
   trains: 'M9 3h6a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3ZM6 11h12M9 21l1.5-4M15 21l-1.5-4',
   voies: 'M8 3 5 21M16 3l3 18M6.5 8h11M5.8 14h12.4M5.2 19h13.6',
