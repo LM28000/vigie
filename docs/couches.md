@@ -229,6 +229,10 @@ Le SIRI réel est beaucoup plus petit que les 119 000 circulations imaginées da
 
 **Ce qui n'est pas fait** : les bus du flux « MeC » (voir plus haut) ; une vérité terrain pour le métro et le tramway par arrêts ; la mesure sur la glibc de la production.
 
+## Synthèse « Aujourd'hui en France »
+
+Pas une couche : un panneau (`web/src/ui/Synthese.tsx`) alimenté par `GET /api/synthese`, qui relit les réponses que les collecteurs gardent déjà (vigilance, Vigicrues, rivières, feux, avions, brouillage, air, retards SNCF) sans aucune requête externe. Les séismes (EMSC) restent lus par le navigateur. Une rubrique `null` est « indisponible » (source muette ou désactivée), distincte d'une rubrique vide, « calme ».
+
 ## Foudre en direct : source et limites
 
 - **Source** : le service d'images ouvert EUMETView (WMS `view.eumetsat.int/geoserver/mtg_fd`, couche `li_afa`, « LI Accumulated Flash Area »). Chaque image donne le nombre d'éclairs par case de 2 km et par tranche de 5 minutes ; une image toutes les 5 minutes, avec **environ 15 minutes de retard**. Ni compte ni clé (`Fees: none`, `AccessConstraints: none`), en-têtes CORS ouverts : le navigateur lit le service directement, le serveur n'est pas sollicité. Le service annonce 20 requêtes par seconde et 8 en parallèle : le site demande des tuiles de 1024 px (une cinquantaine de requêtes à l'ouverture, une dizaine toutes les 5 minutes).

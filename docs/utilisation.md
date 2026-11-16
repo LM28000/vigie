@@ -34,6 +34,10 @@ Raccourcis :
 
 Sur téléphone, tout passe dans une feuille qui monte du bas, à trois hauteurs.
 
+### Aujourd'hui en France
+
+Le bouton « Aujourd'hui » (parmi les puces de couches) ouvre un panneau qui résume ce qui compte en ce moment : vigilances, crues, rivières, feux, brouillage GPS, avions, air, trains en retard, séismes. Cliquer une ligne active la couche et centre la carte sur l'objet. Une rubrique « indisponible » signale une source qui n'a pas répondu, pas un calme. Le panneau s'ouvre aussi par un lien (`synthese=1`) et se ferme avec `Échap`.
+
 ### Modes de vision
 
 Le bouton en forme d'œil, parmi les commandes de la carte (en bas à droite, au-dessus de l'analyse de zone), ouvre un menu de quatre rendus appliqués à toute la carte, fond et couches comprises. Le bouton se remplit quand un mode est actif.
