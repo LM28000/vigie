@@ -79,7 +79,7 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `IDFM_MODES` | `metro,tram,train,cable` | Modes suivis ; ajouter `bus` demande +80 Mo en permanence et +175 Mo de pic (voir [couches](couches.md#bus-dîle-de-france--mesures-et-recommandation)). |
+| `IDFM_MODES` | `metro,tram,train,cable,bus` | Modes suivis ; les bus coûtent ≈ 50 Mo en permanence et au plus ≈ 60 Mo de pic (voir [couches](couches.md#bus-dîle-de-france--mesures-et-décision)) ; les retirer pour revenir aux seuls modes lourds. |
 | `IDFM_INTERVALLE_S` | `180` (minimum `120`) | Intervalle du relevé SIRI, en secondes. |
 | `IDFM_MEMOIRE_MO` | `100` | Budget de mémoire du modèle d'Île-de-France. |
 | `IDFM_GTFS_URL` | GTFS public d'Île-de-France Mobilités | Adresse du GTFS (doit commencer par `https://`). |

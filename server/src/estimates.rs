@@ -158,22 +158,39 @@ fn parse_sources(catalog: &Value) -> Result<Vec<Source>> {
 
 // ───────────────────────── Temps réel (TripUpdates) ─────────────────────────
 
+/// Retard et/ou heure prévue d'un arrêt, sur 8 octets (une réponse SIRI de bus en compte 110 000 : avec deux `Option` de 8 et 16 octets,
+/// les mises à jour gardées entre deux relevés pesaient le double).
 #[derive(Clone, Copy)]
 pub(crate) struct Event {
-    pub delay: Option<i32>,
-    pub time: Option<i64>,
+    delay: i32,
+    time: u32,
 }
 
+const NO_DELAY: i32 = i32::MIN;
+const NO_TIME: u32 = u32::MAX;
+
 impl Event {
+    pub fn new(delay: Option<i32>, time: Option<i64>) -> Self {
+        Self { delay: delay.filter(|d| *d != NO_DELAY).unwrap_or(NO_DELAY), time: time.and_then(|t| u32::try_from(t).ok()).filter(|t| *t != NO_TIME).unwrap_or(NO_TIME) }
+    }
+
+    pub fn delay(self) -> Option<i32> {
+        Some(self.delay).filter(|d| *d != NO_DELAY)
+    }
+
+    pub fn time(self) -> Option<i64> {
+        Some(self.time).filter(|t| *t != NO_TIME).map(i64::from)
+    }
+
     /// Retard en secondes, que le flux donne une heure prévue ou directement un retard.
     fn delay_from(self, scheduled: i64) -> Option<i64> {
-        self.time.map(|time| time - scheduled).or(self.delay.map(i64::from))
+        self.time().map(|time| time - scheduled).or(self.delay().map(i64::from))
     }
 }
 
 pub(crate) struct StopUpdate {
     pub stop_sequence: Option<u32>,
-    pub stop_id: Option<String>,
+    pub stop_id: Option<Box<str>>,
     pub arrival: Option<Event>,
     pub departure: Option<Event>,
 }
@@ -203,11 +220,11 @@ fn decode_realtime(bytes: &[u8], fetched_at: i64) -> Result<Realtime> {
         let Some(update) = entity.trip_update else { continue };
         let Some(trip_id) = update.trip.trip_id else { continue };
         let relationship = update.trip.schedule_relationship.unwrap_or_default();
-        let event = |e: Option<gtfs_rt::StopTimeEvent>| e.map(|e| Event { delay: e.delay, time: e.time });
+        let event = |e: Option<gtfs_rt::StopTimeEvent>| e.map(|e| Event::new(e.delay, e.time));
         let stops = update
             .stop_time_update
             .into_iter()
-            .map(|u| StopUpdate { stop_sequence: u.stop_sequence, stop_id: u.stop_id, arrival: event(u.arrival), departure: event(u.departure) })
+            .map(|u| StopUpdate { stop_sequence: u.stop_sequence, stop_id: u.stop_id.map(Into::into), arrival: event(u.arrival), departure: event(u.departure) })
             .collect();
         trips.entry(trip_id).or_default().push(TripUpdate {
             start_date: update.trip.start_date.as_deref().and_then(parse_date),
@@ -311,14 +328,14 @@ fn place_at(schedule: &Schedule, trip: &Trip, live: &LiveTimes, t: i64) -> Place
     Placement { along: dist[k] + meters * fraction, speed: meters / travel, next: Some(k + 1) }
 }
 
-struct EstimatedVehicle {
-    route: u32,
-    out: VehicleOut,
+pub(crate) struct EstimatedVehicle {
+    pub(crate) route: u32,
+    pub(crate) out: VehicleOut,
 }
 
 /// Les véhicules en circulation d'un réseau à l'instant `now`, positions estimées d'après les horaires de `schedule`
 /// corrigés par `realtime` (s'il est récent).
-fn estimate(schedule: &Schedule, realtime: Option<&Realtime>, now: i64) -> Vec<EstimatedVehicle> {
+pub(crate) fn estimate(schedule: &Schedule, realtime: Option<&Realtime>, now: i64) -> Vec<EstimatedVehicle> {
     let mut vehicles = Vec::new();
     let realtime = realtime.filter(|r| now - r.fetched_at <= RT_MAX_AGE_S);
     for trip in &schedule.trips {
@@ -551,6 +568,12 @@ async fn load_slot(http: &reqwest::Client, data_dir: &Path, shared: &Shared, slo
         let path = ensure_zip(http, data_dir, resource_id, url, prim).await?;
         let now = shared.now();
         let prim_config = shared.prim.clone().filter(|_| prim);
+        if prim {
+            // Île-de-France : l'ancien modèle est libéré avant de construire le nouveau, pas après. Les garder tous deux coûtait un pic de
+            // +57 Mo de plus pour les bus (et fragmente le tas, dont l'allocateur ne rend pas tout au système) ; le prix est que les
+            // véhicules d'Île-de-France disparaissent les 2 à 4 secondes que dure la lecture du GTFS (voir `idf.rs`).
+            drop(std::mem::take(&mut *slot.schedules.write().expect("verrou des horaires")));
+        }
         let built = tokio::task::spawn_blocking(move || match prim_config {
             // Île-de-France : les modes choisis, sans plafond de courses (voir `idf.rs`).
             Some(config) => gtfs_compact::build_days(&path, now, &|info| config.keeps(info), &|info| config.service_days(info), None).map(|mut schedule| {
@@ -795,64 +818,87 @@ async fn prim_poller(http: reqwest::Client, shared: Arc<Shared>, config: idf::Co
             wait = Duration::from_secs(15);
             continue;
         };
-        let fetched_at = Timestamp::now().as_second();
-        let response = http
-            .get(idf::PRIM_URL)
-            .header("apiKey", config.key())
-            .header(reqwest::header::ACCEPT, "application/json")
-            .header(reqwest::header::ACCEPT_ENCODING, "gzip")
-            .timeout(Duration::from_secs(90))
-            .send()
-            .await;
-        let response = match response {
-            Ok(r) => r,
-            // L'erreur de reqwest cite l'adresse mais pas l'en-tête de la clé : elle peut être écrite.
-            Err(error) => {
-                fails += 1;
-                wait = config.every * fails.min(8);
-                warn!("transports Île-de-France : requête SIRI en échec ({fails} de suite) : {error}");
-                continue;
-            }
-        };
-        let remaining = header_number(&response, "x-ratelimit-remaining-day");
-        let reset = header_number(&response, "ratelimit-reset");
-        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            wait = Duration::from_secs(reset.unwrap_or(1800).clamp(60, 6 * 3600));
-            warn!(attente_s = wait.as_secs(), "transports Île-de-France : quota PRIM atteint, en pause");
-            continue;
-        }
-        if !response.status().is_success() {
-            fails += 1;
-            wait = config.every * fails.min(8);
-            warn!("transports Île-de-France : réponse SIRI {} ({fails} de suite)", response.status());
-            continue;
-        }
-        let body = match response.bytes().await {
-            Ok(b) => b,
-            Err(error) => {
-                fails += 1;
-                wait = config.every * fails.min(8);
-                warn!("transports Île-de-France : lecture du SIRI interrompue : {error}");
-                continue;
-            }
-        };
-        if let (Some(left), Some(reset)) = (remaining, reset)
-            && left < u64::from(idf::QUOTA_RESERVE)
-        {
-            wait = Duration::from_secs(reset.clamp(60, 24 * 3600) + 5);
-            warn!(restantes = left, attente_s = wait.as_secs(), "transports Île-de-France : quota PRIM presque épuisé, en pause jusqu'à sa réinitialisation");
-        }
         let started = Instant::now();
         let accepted: HashSet<String> = schedule.route_ids.iter().map(|id| id.to_string()).collect();
-        let result = tokio::task::spawn_blocking(move || {
-            let journeys = idf::parse_siri(&body, &|route| accepted.contains(route))?;
-            Ok::<_, anyhow::Error>(idf::match_journeys(&schedule, &journeys, fetched_at))
-        })
-        .await;
+        let (mut fetched_at, mut remaining) = (Timestamp::now().as_second(), None);
+        let result = if config.replay.is_empty() {
+            let response = http
+                .get(idf::PRIM_URL)
+                .header("apiKey", config.key())
+                .header(reqwest::header::ACCEPT, "application/json")
+                .header(reqwest::header::ACCEPT_ENCODING, "gzip")
+                .timeout(Duration::from_secs(90))
+                .send()
+                .await;
+            let response = match response {
+                Ok(r) => r,
+                // L'erreur de reqwest cite l'adresse mais pas l'en-tête de la clé : elle peut être écrite.
+                Err(error) => {
+                    fails += 1;
+                    wait = config.every * fails.min(8);
+                    warn!("transports Île-de-France : requête SIRI en échec ({fails} de suite) : {error}");
+                    continue;
+                }
+            };
+            remaining = header_number(&response, "x-ratelimit-remaining-day");
+            let reset = header_number(&response, "ratelimit-reset");
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                wait = Duration::from_secs(reset.unwrap_or(1800).clamp(60, 6 * 3600));
+                warn!(attente_s = wait.as_secs(), "transports Île-de-France : quota PRIM atteint, en pause");
+                continue;
+            }
+            if !response.status().is_success() {
+                fails += 1;
+                wait = config.every * fails.min(8);
+                warn!("transports Île-de-France : réponse SIRI {} ({fails} de suite)", response.status());
+                continue;
+            }
+            if let (Some(left), Some(reset)) = (remaining, reset)
+                && left < u64::from(idf::QUOTA_RESERVE)
+            {
+                wait = Duration::from_secs(reset.clamp(60, 24 * 3600) + 5);
+                warn!(restantes = left, attente_s = wait.as_secs(), "transports Île-de-France : quota PRIM presque épuisé, en pause jusqu'à sa réinitialisation");
+            }
+            // Le corps passe du réseau au décodeur par petits morceaux : ni lui ni sa version décompressée (76 Mo) ne sont gardés en entier.
+            let (tx, rx) = tokio::sync::mpsc::channel::<std::io::Result<Vec<u8>>>(4);
+            let work = tokio::task::spawn_blocking(move || {
+                let decoded = idf::decode_siri(idf::ChannelReader::new(rx), &|route| accepted.contains(route))?;
+                Ok::<_, anyhow::Error>((idf::match_journeys(&schedule, &decoded.journeys, fetched_at), decoded.seen))
+            });
+            let mut response = response;
+            loop {
+                match response.chunk().await {
+                    Ok(Some(chunk)) => {
+                        if tx.send(Ok(chunk.to_vec())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(error) => {
+                        let _ = tx.send(Err(std::io::Error::other(format!("lecture du SIRI interrompue : {error}")))).await;
+                        break;
+                    }
+                }
+            }
+            drop(tx);
+            work.await
+        } else {
+            // Test : on rejoue des réponses déjà enregistrées (voir `idf::Config::replay`) ; la plus récente qui ne soit pas dans le futur de l'horloge.
+            let now = shared.now();
+            let files: Vec<(i64, PathBuf)> = config.replay.iter().map(|p| (idf::replay_time(p), p.clone())).collect();
+            let (at, file) = files.iter().filter(|(at, _)| *at <= now).max_by_key(|(at, _)| *at).or(files.iter().min_by_key(|(at, _)| *at)).cloned().expect("au moins un fichier");
+            fetched_at = at;
+            tokio::task::spawn_blocking(move || {
+                let decoded = idf::decode_siri(std::fs::File::open(&file).with_context(|| format!("{} illisible", file.display()))?, &|route| accepted.contains(route))?;
+                Ok::<_, anyhow::Error>((idf::match_journeys(&schedule, &decoded.journeys, fetched_at), decoded.seen))
+            })
+            .await
+        };
         match result {
-            Ok(Ok((realtime, stats))) => {
+            Ok(Ok(((realtime, stats), seen))) => {
                 fails = 0;
                 info!(
+                    circulations_lues = seen,
                     circulations = stats.journeys,
                     par_identifiant = stats.by_id,
                     par_arrets = stats.by_stops,
@@ -876,13 +922,13 @@ async fn prim_poller(http: reqwest::Client, shared: Arc<Shared>, config: idf::Co
 // ───────────────────────── Réponse ─────────────────────────
 
 /// Tous les véhicules estimés des réseaux chargés, au format de `/api/transports`.
-fn assemble(slots: &[Arc<Slot>], now: i64, use_realtime: bool) -> TransitOut {
+fn assemble(slots: &[Arc<Slot>], now: i64, use_realtime: bool, prim_replay: bool) -> TransitOut {
     let mut networks: Vec<NetworkOut> = Vec::new();
     let mut lines: Vec<LineOut> = Vec::new();
     let mut vehicles: Vec<VehicleOut> = Vec::new();
     for slot in slots {
         let schedules = slot.schedules.read().expect("verrou des horaires").clone();
-        let realtime = if use_realtime { slot.realtime.read().expect("verrou du temps réel").clone() } else { None };
+        let realtime = if use_realtime || (prim_replay && slot.source.slug == idf::SLUG) { slot.realtime.read().expect("verrou du temps réel").clone() } else { None };
         let mut line_index: HashMap<(usize, u32), usize> = HashMap::new();
         let network = networks.len();
         let first_vehicle = vehicles.len();
@@ -925,7 +971,7 @@ async fn publisher(state: AppState, shared: Arc<Shared>) {
         }
         let now = shared.now();
         let started = Instant::now();
-        let out = assemble(&slots, now, shared.offset_s == 0);
+        let out = assemble(&slots, now, shared.offset_s == 0, shared.prim.as_ref().is_some_and(|c| !c.replay.is_empty()));
         if last_log.elapsed() > Duration::from_secs(300) {
             let theoretical = out.vehicles.iter().filter(|v| v.est.as_ref().is_some_and(|e| e.theoretical)).count();
             info!(vehicules = out.vehicles.len(), horaire_theorique = theoretical, reseaux = out.networks.len(), ms = started.elapsed().as_millis() as u64, "transports estimés : positions calculées");
@@ -951,8 +997,8 @@ pub async fn poll_forever(http: reqwest::Client, data_dir: PathBuf, state: AppSt
         None => info!("transports Île-de-France : pas de clé IDFM_PRIM_API_KEY, réseau ignoré"),
     }
     let shared = Arc::new(Shared { slots: RwLock::default(), offset_s, tour: AtomicU64::new(0), prim: prim.clone() });
-    // Horloge décalée : le temps réel ne vaut que pour maintenant, on ne dépense pas le quota de PRIM.
-    if let Some(config) = prim.filter(|_| offset_s == 0) {
+    // Horloge décalée : le temps réel ne vaut que pour maintenant, on ne dépense pas le quota de PRIM (sauf pour rejouer des réponses enregistrées).
+    if let Some(config) = prim.filter(|c| offset_s == 0 || !c.replay.is_empty()) {
         tokio::spawn(prim_poller(http.clone(), shared.clone(), config));
     }
     tokio::spawn(loader(http.clone(), data_dir, shared.clone()));

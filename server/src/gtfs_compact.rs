@@ -401,14 +401,17 @@ fn active_services(zip: &mut Zip, dates: [Date; 3]) -> Result<HashMap<String, u8
     Ok(services)
 }
 
-/// Une course en cours de lecture.
+/// Une course lue dans `trips.txt`, sans son identifiant (c'est `stop_times.txt` qui le redonne, au moment de la construire).
 struct RawTrip {
-    id: Box<str>,
     route: u32,
     days: u8,
-    headsign: Option<String>,
-    shape: Option<Vec<u8>>,
+    /// Rang dans `Model::headsigns`, ou `NO_HEADSIGN`.
+    headsign: u32,
+    /// Rang du tracé voulu (dans l'ordre de première apparition), ou `NO_SHAPE`.
+    shape: u32,
 }
+
+const NO_SHAPE: u32 = u32::MAX;
 
 /// Un passage à un arrêt : (course, rang, arrêt, arrivée, départ) ; une heure manquante vaut `MISSING`.
 type Row = (u32, u32, u32, i32, i32);
@@ -417,6 +420,190 @@ const MISSING: i32 = i32::MIN;
 type ShapeVertex = (u32, f32, f32);
 /// Ce qui distingue un motif : (tracé, arrêts, rang des arrêts).
 type PatternKey = (Option<u32>, Vec<u32>, Vec<u32>);
+
+/// Signal interne : un fichier du GTFS (`stop_times.txt` ou `shapes.txt`) n'est pas groupé par course (ou par tracé). La lecture
+/// en flux, qui construit chaque course dès qu'on a lu la dernière de ses lignes, n'est alors pas possible : on relit tout en mémoire.
+#[derive(Debug)]
+struct Ungrouped;
+
+impl std::fmt::Display for Ungrouped {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("fichier GTFS non groupé")
+    }
+}
+
+impl std::error::Error for Ungrouped {}
+
+/// Empreinte de 64 bits d'un identifiant (SipHash à clé fixe : la même d'un lancement à l'autre).
+fn fingerprint(bytes: &[u8]) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hasher.write(bytes);
+    hasher.finish()
+}
+
+/// Identifiant → numéro, sans garder les identifiants : des paires (empreinte, numéro) triées, 12 octets par entrée au lieu de
+/// 80 à 100 pour une table de hachage de chaînes (les 175 000 courses des bus d'Île-de-France : 2 Mo au lieu de 15). Deux
+/// identifiants d'empreinte égale se confondraient (une chance sur un milliard à cette taille) ; pour un identifiant répété, le dernier gagne.
+struct IdIndex(Vec<(u64, u32)>);
+
+impl IdIndex {
+    fn new(mut pairs: Vec<(u64, u32)>) -> Self {
+        pairs.sort_unstable();
+        // Triées par (empreinte, numéro) : on garde, pour chaque empreinte, la dernière entrée.
+        let mut kept: Vec<(u64, u32)> = Vec::with_capacity(pairs.len());
+        for pair in pairs {
+            match kept.last_mut() {
+                Some(last) if last.0 == pair.0 => *last = pair,
+                _ => kept.push(pair),
+            }
+        }
+        kept.shrink_to_fit();
+        Self(kept)
+    }
+
+    fn get(&self, id: &[u8]) -> Option<u32> {
+        let key = fingerprint(id);
+        self.0.binary_search_by_key(&key, |p| p.0).ok().map(|i| self.0[i].1)
+    }
+}
+
+/// Un arrêt de `stops.txt`, avant qu'une course le desserve.
+struct StopRow {
+    lon: f64,
+    lat: f64,
+    name: Box<str>,
+}
+
+/// Tout ce que la construction accumule : elle est faite course par course, à mesure que `stop_times.txt` se lit.
+struct Model {
+    day_starts: [i64; 3],
+    raw_trips: Vec<RawTrip>,
+    /// Tracé voulu → rang dans `shapes` (`NO_SHAPE` : pas (encore) lu, ou inutilisable).
+    shape_of: Vec<u32>,
+    shapes: Vec<Shape>,
+    headsigns: Vec<Box<str>>,
+    /// Arrêts desservis par au moins une course lue, dans l'ordre de première rencontre.
+    stops: Vec<Stop>,
+    pattern_index: HashMap<PatternKey, u32>,
+    patterns: Vec<Pattern>,
+    trips: Vec<Trip>,
+    times: Vec<u16>,
+}
+
+impl Model {
+    /// Ajoute la course `raw` (d'identifiant `id`) d'après ses passages aux arrêts, triés par rang : elle est écartée si ses heures
+    /// sont illisibles ou si un de ses arrêts n'a pas de position.
+    fn add_trip(&mut self, raw: u32, id: &[u8], rows: &[Row]) {
+        let &RawTrip { route, days: trip_days, headsign, shape: trip_shape } = &self.raw_trips[raw as usize];
+        if rows.len() < 2 || rows.iter().any(|r| r.2 == u32::MAX) {
+            return;
+        }
+        let Some(b_times) = complete_times(rows) else { return };
+        let (start, end) = (b_times[0].0, b_times[b_times.len() - 1].0);
+        // Hier ne compte que si la course passe minuit.
+        let mut days = trip_days;
+        if i64::from(end) + self.day_starts[0] <= self.day_starts[1] {
+            days &= !1;
+        }
+        if days == 0 || end - start > i32::from(u16::MAX) {
+            return;
+        }
+        let shape = Some(trip_shape).filter(|s| *s != NO_SHAPE).map(|s| self.shape_of[s as usize]).filter(|s| *s != NO_SHAPE);
+        let key = (shape, rows.iter().map(|r| r.2).collect::<Vec<_>>(), rows.iter().map(|r| r.1).collect::<Vec<_>>());
+        let pattern = match self.pattern_index.get(&key) {
+            Some(&p) => p,
+            None => {
+                let coords: Vec<(f64, f64)> = rows.iter().map(|r| (self.stops[r.2 as usize].lon, self.stops[r.2 as usize].lat)).collect();
+                let projected = shape.and_then(|s| project_stops(&self.shapes[s as usize], &coords).map(|d| (s, d)));
+                let (shape_id, dist) = projected.unwrap_or_else(|| {
+                    // Pas de tracé (ou un tracé qui ne passe pas par les arrêts) : la ligne droite d'un arrêt au suivant.
+                    let line = Shape::from_points(&coords);
+                    let dist = line.dist.clone();
+                    self.shapes.push(line);
+                    ((self.shapes.len() - 1) as u32, dist)
+                });
+                self.patterns.push(Pattern { shape: shape_id, stop: key.1.clone().into(), seq: key.2.clone().into(), dist: dist.into() });
+                self.pattern_index.insert(key, (self.patterns.len() - 1) as u32);
+                (self.patterns.len() - 1) as u32
+            }
+        };
+        let offset = self.times.len() as u32;
+        // Croissance de 12 % (et non le doublement d'un `Vec` ordinaire) : ce tableau est le plus gros du modèle des bus (15 Mo), son
+        // trop-plein transitoire ne doit pas atteindre la moitié de sa taille.
+        let need = 2 * b_times.len();
+        if self.times.capacity() - self.times.len() < need {
+            self.times.reserve_exact(need + self.times.len() / 8);
+        }
+        for &(arrival, departure) in &b_times {
+            self.times.push((arrival - start) as u16);
+            self.times.push((departure - start) as u16);
+        }
+        self.trips.push(Trip { id: text(id).into(), route, pattern, headsign, start, end, days, times: offset });
+    }
+}
+
+/// Lit `shapes.txt` : les tracés voulus (`wanted`, identifiant → rang) sont simplifiés et rangés dans `model.shapes`. En flux
+/// (`buffered` faux), chaque tracé l'est dès qu'on a lu son dernier point, sans garder les points bruts (3,5 millions de points
+/// pour Île-de-France, plus de 40 Mo) ; il faut que les points d'un tracé se suivent. Sinon (`buffered`), tous les points voulus sont gardés.
+fn read_shapes(zip: &mut Zip, wanted: &HashMap<Box<[u8]>, u32>, model: &mut Model, buffered: bool) -> Result<()> {
+    zip.csv("shapes.txt", |mut reader| {
+        let headers = reader.byte_headers()?.clone();
+        let (id, lat, lon, seq) = (required(&headers, "shapes.txt", "shape_id")?, required(&headers, "shapes.txt", "shape_pt_lat")?, required(&headers, "shapes.txt", "shape_pt_lon")?, required(&headers, "shapes.txt", "shape_pt_sequence")?);
+        let mut record = csv::ByteRecord::new();
+        // Mode tampon : les points de tous les tracés voulus ; mode flux : ceux du tracé en cours.
+        let mut all: Vec<Vec<ShapeVertex>> = if buffered { vec![Vec::new(); wanted.len()] } else { Vec::new() };
+        let mut current: Option<(u32, Vec<ShapeVertex>)> = None;
+        let mut last_id: Vec<u8> = Vec::new();
+        let mut last_wanted: Option<u32> = None;
+        let finish = |model: &mut Model, shape: u32, mut points: Vec<ShapeVertex>| {
+            if points.len() < 2 {
+                return;
+            }
+            points.sort_unstable_by_key(|p| p.0);
+            let line: Vec<(f64, f64)> = points.iter().map(|p| (f64::from(p.1), f64::from(p.2))).collect();
+            model.shape_of[shape as usize] = model.shapes.len() as u32;
+            model.shapes.push(Shape::from_points(&simplify(&line, SHAPE_TOLERANCE_M)));
+        };
+        while reader.read_byte_record(&mut record)? {
+            let id_bytes = field(&record, Some(id));
+            if last_id != id_bytes {
+                last_id.clear();
+                last_id.extend_from_slice(id_bytes);
+                last_wanted = wanted.get(id_bytes).copied();
+                if !buffered {
+                    if let Some((shape, points)) = current.take() {
+                        finish(model, shape, points);
+                    }
+                    if let Some(shape) = last_wanted {
+                        // Un tracé déjà terminé qui reparaît : le fichier n'est pas groupé.
+                        if model.shape_of[shape as usize] != NO_SHAPE {
+                            return Err(Ungrouped.into());
+                        }
+                        current = Some((shape, Vec::new()));
+                    }
+                }
+            }
+            let Some(shape) = last_wanted else { continue };
+            let parse = |bytes: &[u8]| std::str::from_utf8(bytes).ok().and_then(|s| s.parse::<f32>().ok());
+            if let (Some(lat), Some(lon), Some(seq)) = (parse(field(&record, Some(lat))), parse(field(&record, Some(lon))), number(field(&record, Some(seq)))) {
+                if buffered {
+                    all[shape as usize].push((seq as u32, lon, lat));
+                } else if let Some((_, points)) = &mut current {
+                    points.push((seq as u32, lon, lat));
+                }
+            }
+        }
+        if let Some((shape, points)) = current.take() {
+            finish(model, shape, points);
+        }
+        for (shape, points) in all.into_iter().enumerate() {
+            finish(model, shape as u32, points);
+        }
+        Ok(())
+    })?;
+    Ok(())
+}
 
 /// Construit le modèle compact d'un GTFS (zip sur disque) pour les trois jours autour de l'instant `now` (secondes UTC).
 /// `guided_only` : ne garder que les tramways, métros, trains et câbles (réseau trop gros).
@@ -439,7 +626,18 @@ pub const ALL_DAYS: u8 = 0b111;
 /// Comme `build_with`, avec en plus les jours de service gardés pour chaque ligne (`days_of`, masque de `Trip::days`) : une course qui
 /// ne roule aucun de ces jours n'est pas lue du tout (ni ses horaires, ni son motif). Les bus d'Île-de-France ne gardent pas « demain » :
 /// c'est ce qui fait leur poids (voir `idf.rs`).
+///
+/// La lecture se fait en flux : `stop_times.txt` (676 Mo décompressés pour Île-de-France) n'est jamais gardé, chaque course est
+/// construite dès que ses lignes ont été lues, et chaque tracé simplifié dès que ses points l'ont été. Cela suppose ces deux
+/// fichiers groupés par course et par tracé, comme le veulent tous les exports usuels ; sinon, on les relit en mémoire.
 pub fn build_days(path: &Path, now: i64, keep: &dyn Fn(&RouteInfo) -> bool, days_of: &dyn Fn(&RouteInfo) -> u8, max_trips: Option<usize>) -> Result<Schedule> {
+    match build_inner(path, now, keep, days_of, max_trips, false) {
+        Err(error) if error.downcast_ref::<Ungrouped>().is_some() => build_inner(path, now, keep, days_of, max_trips, true),
+        other => other,
+    }
+}
+
+fn build_inner(path: &Path, now: i64, keep: &dyn Fn(&RouteInfo) -> bool, days_of: &dyn Fn(&RouteInfo) -> u8, max_trips: Option<usize>, buffered: bool) -> Result<Schedule> {
     let mut zip = Zip::open(path)?;
     let tz = network_zone(&mut zip);
     let today = Timestamp::from_second(now)?.to_zoned(tz.clone()).date();
@@ -464,10 +662,14 @@ pub fn build_days(path: &Path, now: i64, keep: &dyn Fn(&RouteInfo) -> bool, days
         route_ids.push(id.into());
         routes.push(info);
     }
+    drop(routes_text);
 
-    // Courses des services actifs.
+    // Courses des services actifs : ni leur identifiant, ni leur titre de direction ou leur tracé ne sont gardés en texte.
     let mut raw_trips: Vec<RawTrip> = Vec::new();
-    let mut trip_index: HashMap<Box<[u8]>, u32> = HashMap::new();
+    let mut trip_pairs: Vec<(u64, u32)> = Vec::new();
+    let mut headsign_index: HashMap<Box<[u8]>, u32> = HashMap::new();
+    let mut headsigns: Vec<Box<str>> = Vec::new();
+    let mut wanted_shapes: HashMap<Box<[u8]>, u32> = HashMap::new();
     let too_many = zip
         .csv("trips.txt", |mut reader| {
             let headers = reader.byte_headers()?.clone();
@@ -484,11 +686,18 @@ pub fn build_days(path: &Path, now: i64, keep: &dyn Fn(&RouteInfo) -> bool, days
                 if max_trips.is_some_and(|max| raw_trips.len() >= max) {
                     return Ok(true);
                 }
-                let id_bytes = field(&record, Some(id));
-                let shape = Some(field(&record, shape)).filter(|s| !s.is_empty()).map(<[u8]>::to_vec);
-                let headsign = Some(text(field(&record, headsign))).filter(|s| !s.is_empty());
-                trip_index.insert(id_bytes.into(), raw_trips.len() as u32);
-                raw_trips.push(RawTrip { id: text(id_bytes).into(), route, days, headsign, shape });
+                trip_pairs.push((fingerprint(field(&record, Some(id))), raw_trips.len() as u32));
+                let shape = Some(field(&record, shape)).filter(|s| !s.is_empty()).map_or(NO_SHAPE, |s| {
+                    let next = wanted_shapes.len() as u32;
+                    *wanted_shapes.entry(s.into()).or_insert(next)
+                });
+                let headsign = Some(field(&record, headsign)).filter(|h| !h.is_empty()).map_or(NO_HEADSIGN, |h| {
+                    *headsign_index.entry(h.into()).or_insert_with(|| {
+                        headsigns.push(text(h).into());
+                        (headsigns.len() - 1) as u32
+                    })
+                });
+                raw_trips.push(RawTrip { route, days, headsign, shape });
             }
             Ok(false)
         })?
@@ -496,167 +705,135 @@ pub fn build_days(path: &Path, now: i64, keep: &dyn Fn(&RouteInfo) -> bool, days
     if too_many {
         bail!("trop de courses");
     }
+    drop(headsign_index);
+    let trip_index = IdIndex::new(trip_pairs);
 
-    // Passages aux arrêts des seules courses retenues.
-    let mut stop_index: HashMap<Box<[u8]>, u32> = HashMap::new();
-    let mut stop_order: Vec<Box<[u8]>> = Vec::new();
-    let mut rows: Vec<Row> = Vec::new();
-    zip.csv("stop_times.txt", |mut reader| {
-        let headers = reader.byte_headers()?.clone();
-        let (trip, stop, seq) = (required(&headers, "stop_times.txt", "trip_id")?, required(&headers, "stop_times.txt", "stop_id")?, required(&headers, "stop_times.txt", "stop_sequence")?);
-        let (arrival, departure) = (required(&headers, "stop_times.txt", "arrival_time")?, required(&headers, "stop_times.txt", "departure_time")?);
-        let mut record = csv::ByteRecord::new();
-        while reader.read_byte_record(&mut record)? {
-            let Some(&trip) = trip_index.get(field(&record, Some(trip))) else { continue };
-            let stop_bytes = field(&record, Some(stop));
-            let stop = *stop_index.entry(stop_bytes.into()).or_insert_with(|| {
-                stop_order.push(stop_bytes.into());
-                (stop_order.len() - 1) as u32
-            });
-            let seq = number(field(&record, Some(seq))).unwrap_or(0) as u32;
-            let (arrival, departure) = (parse_time(field(&record, Some(arrival))).unwrap_or(MISSING), parse_time(field(&record, Some(departure))).unwrap_or(MISSING));
-            rows.push((trip, seq, stop, arrival, departure));
-        }
-        Ok(())
-    })?
-    .context("stop_times.txt absent")?;
-    rows.sort_unstable_by_key(|r| (r.0, r.1));
-    // Les index par identifiant ne servent plus (des dizaines de Mo pour les bus d'Île-de-France) : on les libère avant le gros du travail.
-    drop(trip_index);
+    let mut model = Model {
+        day_starts,
+        shape_of: vec![NO_SHAPE; wanted_shapes.len()],
+        trips: Vec::with_capacity(raw_trips.len()),
+        raw_trips,
+        shapes: Vec::new(),
+        headsigns,
+        stops: Vec::new(),
+        pattern_index: HashMap::new(),
+        patterns: Vec::new(),
+        times: Vec::new(),
+    };
 
-    // Arrêts utilisés.
-    let mut stops: Vec<Stop> = stop_order.iter().map(|id| Stop { id: text(id).into(), name: "".into(), lon: f64::NAN, lat: f64::NAN }).collect();
+    // Tracés des courses retenues (avant les passages : un motif se projette sur son tracé dès sa première course).
+    if !wanted_shapes.is_empty() {
+        read_shapes(&mut zip, &wanted_shapes, &mut model, buffered)?;
+    }
+    drop(wanted_shapes);
+
+    // Positions de tous les arrêts du fichier (53 000 pour Île-de-France : quelques Mo, libérés ensuite) ; le rang d'un arrêt dans
+    // `Model::stops` n'est donné qu'à sa première course.
+    let mut stop_pairs: Vec<(u64, u32)> = Vec::new();
+    let mut stop_rows: Vec<StopRow> = Vec::new();
     zip.csv("stops.txt", |mut reader| {
         let headers = reader.byte_headers()?.clone();
         let (id, lat, lon) = (required(&headers, "stops.txt", "stop_id")?, required(&headers, "stops.txt", "stop_lat")?, required(&headers, "stops.txt", "stop_lon")?);
         let name = column(&headers, "stop_name");
         let mut record = csv::ByteRecord::new();
         while reader.read_byte_record(&mut record)? {
-            let Some(&i) = stop_index.get(field(&record, Some(id))) else { continue };
             let parse = |bytes: &[u8]| std::str::from_utf8(bytes).ok().and_then(|s| s.parse::<f64>().ok());
-            if let (Some(lat), Some(lon)) = (parse(field(&record, Some(lat))), parse(field(&record, Some(lon)))) {
-                let stop = &mut stops[i as usize];
-                (stop.lat, stop.lon, stop.name) = (lat, lon, text(field(&record, name)).into());
-            }
+            // Sans position lisible, l'arrêt reste inconnu : les courses qui le desservent sont écartées.
+            let (Some(lat), Some(lon)) = (parse(field(&record, Some(lat))), parse(field(&record, Some(lon)))) else { continue };
+            stop_pairs.push((fingerprint(field(&record, Some(id))), stop_rows.len() as u32));
+            stop_rows.push(StopRow { lon, lat, name: text(field(&record, name)).into() });
         }
         Ok(())
     })?
     .context("stops.txt absent")?;
-    drop(stop_index);
+    let stop_index = IdIndex::new(stop_pairs);
+    // Rang dans `model.stops` de chaque arrêt de `stops.txt`, une fois rencontré.
+    let mut stop_used: Vec<u32> = vec![u32::MAX; stop_rows.len()];
 
-    // Heures complètes et croissantes de chaque course ; celles qu'on ne sait pas lire sont écartées.
-    // Les heures ne sont pas gardées ici (des millions de paires pour les bus) : on vérifie qu'elles sont lisibles, on les recalcule plus bas.
-    struct Built {
-        raw: u32,
-        rows: std::ops::Range<usize>,
-    }
-    let mut built: Vec<Built> = Vec::new();
-    let mut at = 0;
-    while at < rows.len() {
-        let raw = rows[at].0;
-        let end = at + rows[at..].iter().take_while(|r| r.0 == raw).count();
-        if complete_times(&rows[at..end]).is_some() && rows[at..end].len() >= 2 && rows[at..end].iter().all(|r| stops[r.2 as usize].lat.is_finite()) {
-            built.push(Built { raw, rows: at..end });
-        }
-        at = end;
-    }
-
-    // Tracés des courses restantes.
-    // Points de chaque tracé voulu : (rang, longitude, latitude).
-    let mut wanted_shapes: HashMap<Box<[u8]>, Vec<ShapeVertex>> = HashMap::new();
-    for b in &built {
-        if let Some(shape) = &raw_trips[b.raw as usize].shape {
-            wanted_shapes.entry(shape.as_slice().into()).or_default();
-        }
-    }
-    if !wanted_shapes.is_empty() {
-        zip.csv("shapes.txt", |mut reader| {
-            let headers = reader.byte_headers()?.clone();
-            let (id, lat, lon, seq) = (required(&headers, "shapes.txt", "shape_id")?, required(&headers, "shapes.txt", "shape_pt_lat")?, required(&headers, "shapes.txt", "shape_pt_lon")?, required(&headers, "shapes.txt", "shape_pt_sequence")?);
-            let mut record = csv::ByteRecord::new();
-            while reader.read_byte_record(&mut record)? {
-                let Some(points) = wanted_shapes.get_mut(field(&record, Some(id))) else { continue };
-                let parse = |bytes: &[u8]| std::str::from_utf8(bytes).ok().and_then(|s| s.parse::<f32>().ok());
-                if let (Some(lat), Some(lon), Some(seq)) = (parse(field(&record, Some(lat))), parse(field(&record, Some(lon))), number(field(&record, Some(seq)))) {
-                    points.push((seq as u32, lon, lat));
+    // Passages aux arrêts : une course est construite dès qu'on a lu toutes ses lignes (mode tampon : après les avoir toutes lues et triées).
+    zip.csv("stop_times.txt", |mut reader| {
+        let headers = reader.byte_headers()?.clone();
+        let (trip, stop, seq) = (required(&headers, "stop_times.txt", "trip_id")?, required(&headers, "stop_times.txt", "stop_id")?, required(&headers, "stop_times.txt", "stop_sequence")?);
+        let (arrival, departure) = (required(&headers, "stop_times.txt", "arrival_time")?, required(&headers, "stop_times.txt", "departure_time")?);
+        let mut record = csv::ByteRecord::new();
+        // La course en cours : son identifiant, son rang, ses passages ; `done` marque celles qui sont finies (détecte un fichier non groupé).
+        let mut current_id: Vec<u8> = Vec::new();
+        let mut current: Option<u32> = None;
+        let mut rows: Vec<Row> = Vec::new();
+        let mut done: Vec<bool> = if buffered { Vec::new() } else { vec![false; model.raw_trips.len()] };
+        let mut all_ids: Vec<(u32, Box<[u8]>)> = Vec::new();
+        let flush = |model: &mut Model, id: &[u8], raw: u32, rows: &mut Vec<Row>| {
+            if !rows.windows(2).all(|w| w[0].1 <= w[1].1) {
+                rows.sort_by_key(|r| r.1);
+            }
+            model.add_trip(raw, id, rows);
+            rows.clear();
+        };
+        while reader.read_byte_record(&mut record)? {
+            let id_bytes = field(&record, Some(trip));
+            if current_id != id_bytes {
+                if !buffered && let Some(raw) = current {
+                    flush(&mut model, &current_id, raw, &mut rows);
+                    done[raw as usize] = true;
+                }
+                current_id.clear();
+                current_id.extend_from_slice(id_bytes);
+                current = trip_index.get(id_bytes);
+                if let Some(raw) = current {
+                    if !buffered && done[raw as usize] {
+                        return Err(Ungrouped.into());
+                    }
+                    if buffered {
+                        all_ids.push((raw, id_bytes.into()));
+                    }
                 }
             }
-            Ok(())
-        })?;
-    }
-    let mut shape_by_id: HashMap<Box<[u8]>, u32> = HashMap::new();
-    let mut shapes: Vec<Shape> = Vec::new();
-    for (id, mut points) in wanted_shapes {
-        if points.len() < 2 {
-            continue;
+            let Some(raw) = current else { continue };
+            let stop_bytes = field(&record, Some(stop));
+            let stop = match stop_index.get(stop_bytes) {
+                Some(row) => {
+                    if stop_used[row as usize] == u32::MAX {
+                        let s = &stop_rows[row as usize];
+                        stop_used[row as usize] = model.stops.len() as u32;
+                        model.stops.push(Stop { id: text(stop_bytes).into(), name: s.name.clone(), lon: s.lon, lat: s.lat });
+                    }
+                    stop_used[row as usize]
+                }
+                None => u32::MAX,
+            };
+            let seq = number(field(&record, Some(seq))).unwrap_or(0) as u32;
+            let (arrival, departure) = (parse_time(field(&record, Some(arrival))).unwrap_or(MISSING), parse_time(field(&record, Some(departure))).unwrap_or(MISSING));
+            rows.push((raw, seq, stop, arrival, departure));
         }
-        points.sort_unstable_by_key(|p| p.0);
-        let line: Vec<(f64, f64)> = points.iter().map(|p| (f64::from(p.1), f64::from(p.2))).collect();
-        shape_by_id.insert(id, shapes.len() as u32);
-        shapes.push(Shape::from_points(&simplify(&line, SHAPE_TOLERANCE_M)));
-    }
-
-    // Motifs et courses.
-    let mut headsign_index: HashMap<String, u32> = HashMap::new();
-    let mut headsigns: Vec<Box<str>> = Vec::new();
-    let mut pattern_index: HashMap<PatternKey, u32> = HashMap::new();
-    let mut patterns: Vec<Pattern> = Vec::new();
-    let mut trips: Vec<Trip> = Vec::with_capacity(built.len());
-    let mut times: Vec<u16> = Vec::new();
-    for b in &built {
-        let raw = &raw_trips[b.raw as usize];
-        let Some(b_times) = complete_times(&rows[b.rows.clone()]) else { continue };
-        let (start, end) = (b_times[0].0, b_times[b_times.len() - 1].0);
-        // Hier ne compte que si la course passe minuit.
-        let mut days = raw.days;
-        if i64::from(end) + day_starts[0] <= day_starts[1] {
-            days &= !1;
-        }
-        if days == 0 || end - start > i32::from(u16::MAX) {
-            continue;
-        }
-        let rows = &rows[b.rows.clone()];
-        let shape = raw.shape.as_deref().and_then(|s| shape_by_id.get(s)).copied();
-        let key = (shape, rows.iter().map(|r| r.2).collect::<Vec<_>>(), rows.iter().map(|r| r.1).collect::<Vec<_>>());
-        let pattern = match pattern_index.get(&key) {
-            Some(&p) => p,
-            None => {
-                let coords: Vec<(f64, f64)> = rows.iter().map(|r| (stops[r.2 as usize].lon, stops[r.2 as usize].lat)).collect();
-                let projected = shape.and_then(|s| project_stops(&shapes[s as usize], &coords).map(|d| (s, d)));
-                let (shape_id, dist) = projected.unwrap_or_else(|| {
-                    // Pas de tracé (ou un tracé qui ne passe pas par les arrêts) : la ligne droite d'un arrêt au suivant.
-                    let line = Shape::from_points(&coords);
-                    let dist = line.dist.clone();
-                    shapes.push(line);
-                    ((shapes.len() - 1) as u32, dist)
-                });
-                patterns.push(Pattern { shape: shape_id, stop: key.1.clone().into(), seq: key.2.clone().into(), dist: dist.into() });
-                pattern_index.insert(key, (patterns.len() - 1) as u32);
-                (patterns.len() - 1) as u32
+        if buffered {
+            // Toutes les lignes sont là, dans le désordre : on les trie par course puis par rang, et on construit course par course.
+            let ids: HashMap<u32, Box<[u8]>> = all_ids.into_iter().collect();
+            rows.sort_unstable_by_key(|r| (r.0, r.1));
+            let mut at = 0;
+            while at < rows.len() {
+                let raw = rows[at].0;
+                let end = at + rows[at..].iter().take_while(|r| r.0 == raw).count();
+                model.add_trip(raw, &ids[&raw], &rows[at..end]);
+                at = end;
             }
-        };
-        let headsign = raw.headsign.as_ref().map_or(NO_HEADSIGN, |h| {
-            *headsign_index.entry(h.clone()).or_insert_with(|| {
-                headsigns.push(h.as_str().into());
-                (headsigns.len() - 1) as u32
-            })
-        });
-        let offset = times.len() as u32;
-        for &(arrival, departure) in &b_times {
-            times.push((arrival - start) as u16);
-            times.push((departure - start) as u16);
+        } else if let Some(raw) = current {
+            flush(&mut model, &current_id, raw, &mut rows);
         }
-        trips.push(Trip { id: raw.id.clone(), route: raw.route, pattern, headsign, start, end, days, times: offset });
-    }
+        Ok(())
+    })?
+    .context("stop_times.txt absent")?;
+    drop((stop_index, stop_rows, stop_used, trip_index));
 
-    // Seuls les arrêts desservis sont gardés, renumérotés.
+    let Model { mut shapes, headsigns, stops, mut patterns, mut trips, mut times, .. } = model;
+    // Seuls les arrêts desservis par une course gardée le restent, renumérotés.
     let mut used = vec![u32::MAX; stops.len()];
     let mut kept_stops: Vec<Stop> = Vec::new();
+    let mut stops: Vec<Option<Stop>> = stops.into_iter().map(Some).collect();
     for pattern in &mut patterns {
         for stop in pattern.stop.iter_mut() {
             if used[*stop as usize] == u32::MAX {
                 used[*stop as usize] = kept_stops.len() as u32;
-                kept_stops.push(Stop { id: stops[*stop as usize].id.clone(), name: stops[*stop as usize].name.clone(), lon: stops[*stop as usize].lon, lat: stops[*stop as usize].lat });
+                kept_stops.push(stops[*stop as usize].take().expect("arrêt déjà repris"));
             }
             *stop = used[*stop as usize];
         }

@@ -43,7 +43,7 @@ IDFM:TER:1,12:10:00,12:10:00,IDFM:monomodalStopPlace:200,0\n\
 IDFM:TER:1,12:20:00,12:20:00,IDFM:monomodalStopPlace:201,1\n";
 
 pub(crate) fn config(modes: &[&str]) -> Config {
-    Config { key: "clé-de-test".into(), modes: modes.iter().map(|m| m.to_string()).collect(), every: Duration::from_secs(180), memory_limit: 100 << 20, gtfs_url: DEFAULT_GTFS_URL.into() }
+    Config { key: "clé-de-test".into(), modes: modes.iter().map(|m| m.to_string()).collect(), every: Duration::from_secs(180), memory_limit: 100 << 20, gtfs_url: DEFAULT_GTFS_URL.into(), replay: Vec::new() }
 }
 
 /// Le GTFS d'Île-de-France de poche, construit pour le 10 novembre 2026 à midi, heure de Paris.
@@ -120,10 +120,10 @@ fn le_siri_est_lu_en_flux_et_filtre_par_ligne() {
     ]);
     let all = parse_siri(&body, &|_| true).unwrap();
     assert_eq!(all.len(), 2);
-    assert_eq!(all[0].route, "IDFM:C01371");
-    assert_eq!(all[0].short_ref, "20261110.235.R.C01371");
+    assert_eq!(&*all[0].route, "IDFM:C01371");
+    assert_eq!(&*all[0].short_ref, "20261110.235.R.C01371");
     assert_eq!(all[0].destination, Some(StopCode { area: false, n: 100 }));
-    assert_eq!(all[1].short_ref, "3853623");
+    assert_eq!(&*all[1].short_ref, "3853623");
     let metro = parse_siri(&body, &|route| route == "IDFM:C01371").unwrap();
     assert_eq!(metro.len(), 1);
     // Le même JSON compressé.
@@ -164,7 +164,7 @@ fn le_metro_est_rapproche_par_ses_arrets_et_son_sens() {
     assert!(!a.delay_known, "sans heure théorique dans le SIRI, le retard n'est pas affiché");
     assert_eq!(a.stops.len(), 2);
     let at_101 = a.stops.iter().find(|s| s.stop_sequence == Some(1)).unwrap();
-    assert_eq!(at_101.arrival.unwrap().time, Some(fixture::paris("2026-11-10T12:02:30")));
+    assert_eq!(at_101.arrival.unwrap().time(), Some(fixture::paris("2026-11-10T12:02:30")));
     assert!(realtime.trips.contains_key("IDFM:RATP:B") && !realtime.trips.contains_key("IDFM:RATP:C"));
 }
 
@@ -205,7 +205,7 @@ fn le_rer_est_rapproche_par_identifiant_et_son_retard_est_exact() {
     assert_eq!(stats.by_id, 1);
     let update = &realtime.trips[&format!("IDFM:TN:SNCF:{uuid}")][0];
     assert!(update.delay_known);
-    assert_eq!(update.stops.iter().map(|s| s.departure.unwrap().delay).collect::<Vec<_>>(), [Some(120), Some(180)]);
+    assert_eq!(update.stops.iter().map(|s| s.departure.unwrap().delay()).collect::<Vec<_>>(), [Some(120), Some(180)]);
 }
 
 // ───────────────────────── Bus ─────────────────────────
@@ -270,7 +270,7 @@ fn des_bus_qui_se_suivent_a_dix_minutes_sont_chacun_rapproches_de_leur_course() 
     let (realtime, stats) = match_journeys(&schedule, &journeys, now);
     assert_eq!((stats.journeys, stats.by_stops, stats.unmatched), (3, 3, 0));
     // Chacun a la course dont l'heure *théorique* est la sienne, quel que soit son retard : 6 minutes de retard ne font pas du 1er le 2e.
-    let delay_at = |trip: &str, sequence: u32| realtime.trips[trip][0].stops.iter().find(|s| s.stop_sequence == Some(sequence)).unwrap().arrival.unwrap().delay;
+    let delay_at = |trip: &str, sequence: u32| realtime.trips[trip][0].stops.iter().find(|s| s.stop_sequence == Some(sequence)).unwrap().arrival.unwrap().delay();
     assert_eq!(delay_at("IDFM:BUS:1", 1), Some(360));
     assert_eq!(delay_at("IDFM:BUS:2", 1), Some(60));
     assert_eq!(delay_at("IDFM:BUS:3", 1), Some(0));
@@ -287,4 +287,104 @@ fn un_bus_sans_heure_theorique_est_rapproche_par_ses_heures_prevues() {
     assert_eq!(stats.by_stops, 1);
     assert!(realtime.trips.contains_key("IDFM:BUS:2"));
     assert!(!realtime.trips["IDFM:BUS:2"][0].delay_known, "sans heure théorique : pas de retard affiché");
+}
+
+// ───────────────────────── Décodage en flux et appels aberrants ─────────────────────────
+
+#[test]
+fn le_siri_est_decode_morceau_par_morceau_comme_d_un_seul_tenant() {
+    let body = siri(vec![
+        journey("C01371", "RATP-SIV:VehicleJourney::a:LOC", None, vec![call("STIF:StopPoint:Q:101:", "2026-11-10T12:02:30", None)]),
+        journey("C00033", "509:VehicleJourney::b:LOC", None, vec![call("STIF:StopPoint:Q:101:", "2026-11-10T12:02:30", Some("2026-11-10T12:02:00"))]),
+        journey("C00033", "509:VehicleJourney::c:LOC", None, vec![call("STIF:StopPoint:Q:100:", "2026-11-10T12:03:30", None)]),
+    ]);
+    let mut gz = Vec::new();
+    {
+        let mut encoder = flate2::write::GzEncoder::new(&mut gz, flate2::Compression::fast());
+        std::io::Write::write_all(&mut encoder, &body).unwrap();
+        encoder.finish().unwrap();
+    }
+    // Le corps arrive par morceaux de 7 octets, comme du réseau : le décodeur ne doit jamais en avoir besoin en entier.
+    for payload in [&body, &gz] {
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        let feeder = {
+            let payload = payload.clone();
+            std::thread::spawn(move || {
+                for chunk in payload.chunks(7) {
+                    tx.blocking_send(Ok(chunk.to_vec())).unwrap();
+                }
+            })
+        };
+        let decoded = decode_siri(ChannelReader::new(rx), &|route| route == "IDFM:C00033").unwrap();
+        feeder.join().unwrap();
+        assert_eq!(decoded.seen, 3, "les trois circulations sont lues");
+        assert_eq!(decoded.journeys.len(), 2, "seules celles de la ligne voulue sont gardées");
+        assert_eq!(&*decoded.journeys[0].short_ref, "b");
+    }
+    // Un corps interrompu en route est une erreur, pas une réponse partielle.
+    let (tx, rx) = tokio::sync::mpsc::channel(4);
+    let half = body[..body.len() / 2].to_vec();
+    let feeder = std::thread::spawn(move || {
+        tx.blocking_send(Ok(half)).unwrap();
+        tx.blocking_send(Err(std::io::Error::other("coupé"))).unwrap();
+    });
+    assert!(decode_siri(ChannelReader::new(rx), &|_| true).is_err());
+    feeder.join().unwrap();
+}
+
+#[test]
+fn un_appel_aberrant_ne_fige_pas_le_vehicule_a_son_depart() {
+    let schedule = bus_schedule("bus-aberrant", false);
+    let now = fixture::paris("2026-11-10T12:08:00");
+    // Le bus de 12:10 est annoncé à l'heure à 100 et 101, mais un appel à 102 dit 12:40 : 24 minutes d'écart (heures croissantes, donc pas rejeté comme sens inverse).
+    let bus = journey(
+        "C00033",
+        "509_KGPVM:VehicleJourney::x:LOC",
+        Some("STIF:StopPoint:Q:102:"),
+        vec![call("STIF:StopPoint:Q:100:", "2026-11-10T12:10:00", Some("2026-11-10T12:10:00")), call("STIF:StopPoint:Q:101:", "2026-11-10T12:13:00", Some("2026-11-10T12:13:00")), call("STIF:StopPoint:Q:102:", "2026-11-10T12:40:00", Some("2026-11-10T12:16:00"))],
+    );
+    let (realtime, stats) = match_journeys(&schedule, &parse_siri(&siri(vec![bus]), &|_| true).unwrap(), now);
+    assert_eq!(stats.by_stops, 1);
+    let update = &realtime.trips["IDFM:BUS:2"][0];
+    assert_eq!(update.stops.len(), 2, "l'appel aberrant est écarté, les deux autres restent");
+    assert!(update.stops.iter().all(|s| s.stop_sequence != Some(2)));
+}
+
+#[test]
+fn un_gtfs_dont_les_passages_sont_melanges_donne_le_meme_modele_qu_un_gtfs_groupe() {
+    let build = |name: &str, stop_times: String| {
+        let zip = fixture::tisseo_zip_with(
+            name,
+            &[
+                ("agency.txt".into(), AGENCY.into()),
+                ("calendar.txt".into(), BUS_CALENDAR.into()),
+                ("calendar_dates.txt".into(), BUS_CALENDAR_DATES.into()),
+                ("routes.txt".into(), ROUTES.into()),
+                ("stops.txt".into(), STOPS.into()),
+                ("trips.txt".into(), BUS_TRIPS.into()),
+                ("stop_times.txt".into(), stop_times),
+                ("shapes.txt".into(), "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n".into()),
+            ],
+        );
+        let config = config(&["bus"]);
+        gtfs_compact::build_days(&zip.0, fixture::paris("2026-11-10T12:00:00"), &|info| config.keeps(info), &|info| config.service_days(info), None).unwrap()
+    };
+    let grouped = build("groupe", BUS_STOP_TIMES.into());
+    // Mêmes lignes, une sur deux d'abord : les courses ne se suivent plus (lecture en mémoire de secours), et les rangs sont dans le désordre.
+    let lines: Vec<&str> = BUS_STOP_TIMES.lines().skip(1).collect();
+    let mut shuffled = String::from("trip_id,arrival_time,departure_time,stop_id,stop_sequence\n");
+    for parity in [0, 1] {
+        for line in lines.iter().rev().enumerate().filter(|(i, _)| i % 2 == parity).map(|(_, l)| l) {
+            shuffled += line;
+            shuffled.push('\n');
+        }
+    }
+    let mixed = build("melange", shuffled);
+    assert_eq!(grouped.trip_count(), mixed.trip_count());
+    let describe = |s: &Schedule| {
+        let mut v: Vec<(String, Vec<i32>, usize)> = s.trips.iter().map(|t| (t.id.to_string(), (0..s.patterns[t.pattern as usize].stop.len()).map(|i| s.times_of(t, i).0).collect(), s.patterns[t.pattern as usize].stop.len())).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(describe(&grouped), describe(&mixed));
 }

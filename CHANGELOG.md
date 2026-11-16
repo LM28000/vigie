@@ -2,6 +2,15 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 16 novembre 2026 — Bus d'Île-de-France activés
+
+- **Bus d'Île-de-France activés par défaut** (`IDFM_MODES=metro,tram,train,cable,bus`, retirables) : ≈ +45 Mo en permanence, pire cumulé estimé à 805 Mo avec les tuiles, sous le seuil de 850 Mo ([mesures](docs/couches.md#bus-dîle-de-france--mesures-et-décision)).
+- **GTFS lu en flux** : `stop_times.txt` n'est plus gardé, courses construites au fil de la lecture, tracés simplifiés à la volée, identifiants réduits à une empreinte ; pic de construction avec bus 169 → 57 Mo, mémoire résidente 211 → 69 Mo (macOS). Lecture en mémoire de secours si le GTFS n'est pas groupé. L'ancien modèle d'Île-de-France est libéré avant la relecture.
+- **SIRI décodé circulation par circulation** (`DeserializeSeed`), corps de la réponse transmis au décodeur par morceaux (gzip décompressé au fil de l'eau) ; arrêts annoncés sur 32 octets, mises à jour de courses deux fois plus petites : pic de décodage 22 → 7 Mo, temps réel gardé 17 → 11 Mo.
+- **Rapprochement mesuré sur de vraies réponses PRIM** (2 requêtes) : 67 % des bus rapprochés (96,5 % de ceux qui donnent l'heure théorique, 96 % de bonnes attributions quand on cache l'identifiant), appels aberrants écartés (positions invraisemblables : 8,9 et 7,5 → 6,6 et 4,5 % pour métro et tramway, 1,25 et 1,03 → 1,24 et 0,74 % pour les bus, sur les deux relevés). Le flux « MeC » (41 % des bus) mélange les passages de plusieurs véhicules : laissé à l'horaire théorique.
+- Site : bus des réseaux de plus de 1 500 véhicules absents sous le zoom 12, petits sans contour jusqu'au 14, positions recalculées au plus tous les demi-pas de glissement.
+- Outils : `IDFM_SIRI_FICHIERS` (rejeu de réponses enregistrées, aucune requête PRIM), tests `mesure_gtfs_idfm` (tas exact, relecture, SIRI) et `qualite_siri_idfm`.
+
 ## 16 novembre 2026 — Rivières et parkings en direct
 
 - **Rivières en direct** (Environnement) : les ~2 800 stations hydrométriques de métropole (Hub'Eau, API Hydrométrie, Licence Ouverte), un point par station coloré par la **tendance de la hauteur sur 3 h** (monte vite, monte, stable, baisse ; échelle divergente validée jour et nuit, doublée d'un symbole), anneau vide pour les stations sans mesure récente, anneau de la couleur de vigilance quand le tronçon Vigicrues voisin est jaune, orange ou rouge. Fiche : hauteur, débit, tendance, courbe de 48 h chargée à l'ouverture, lien Hydroportail. Serveur : `GET /api/rivieres`, `GET /api/rivieres/{code}` ; relevé toutes les 15 min par lots de 20 000 (jamais une requête par station), référentiel une fois par jour, quelques Mo en mémoire. En direct seulement ([docs/couches.md](docs/couches.md#rivières-en-direct-hubeau-hydrométrie)).

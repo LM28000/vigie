@@ -207,6 +207,9 @@ export interface TransitData {
   collectedAt: number;
   /** Incrémenté quand au moins un véhicule a bougé : déclenche le recalcul des positions par deck.gl. */
   motion: number;
+  /** Dernier calcul des positions (`place`) : instant et version du relief, pour ne pas le refaire à chaque image de la caméra. */
+  placedAt?: number;
+  placedVersion?: number;
   replay?: TransitReplay;
 }
 
@@ -221,6 +224,15 @@ const LABELS_FROM_ZOOM = 13;
  * un bus de 12 m fait moins de deux pixels : il faudrait l'agrandir de dix fois (une rame de métro de 40 m ferait alors 400 m).
  */
 const MESH_FROM_ZOOM = 15;
+/**
+ * Bus d'un très gros réseau (Île-de-France : 8 000 à 12 000 bus en circulation aux heures de pointe) : à l'échelle d'une région, ce
+ * sont des milliers d'icônes de 14 pixels qui se recouvrent (le fond de l'écran, pas le processeur, ralentit alors le déplacement de la
+ * carte : 17 images par seconde sur Paris au zoom 12 avec 7 500 bus, 55 sans). Sous `DENSE_BUS_FROM_ZOOM` on ne les montre pas (les
+ * métros, trams et trains du même réseau restent) ; jusqu'à `DENSE_BUS_FULL_ZOOM` ils sont petits et sans contour ; ensuite comme les autres.
+ */
+const DENSE_NETWORK = 1500;
+const DENSE_BUS_FROM_ZOOM = 12;
+const DENSE_BUS_FULL_ZOOM = 14;
 /** Hauteur (m) de la maquette au-dessus du relief CPU : les roues ne doivent pas s'enfoncer dans le relief rendu (maillage plus grossier). */
 const MESH_LIFT_M = 0.7;
 /** Position estimée en 3D : la maquette est translucide (alpha sur 255), posée sur une empreinte pointillée. */
@@ -726,6 +738,21 @@ function shows(data: TransitData, time: number): boolean {
   return data.replay ? isReplayTime(time) && data.replay.chunk !== null : !isReplayTime(time) && time <= Date.now() + 60_000;
 }
 
+/**
+ * Faut-il recalculer les positions ? Le moteur redemande les couches à chaque image de la caméra (déplacement, rotation) ; poser 8 000
+ * véhicules (heure de pointe en Île-de-France) à chacune coûtait 15 à 20 images par seconde. On ne le refait que quand un véhicule a pu
+ * bouger d'un pixel (la moitié du pas de `glideStepMs`), ou, si le relief a changé, au plus tous les 150 ms.
+ */
+function placeDue(data: TransitData, time: number, version: number, zoom: number): boolean {
+  const elapsed = data.placedAt === undefined ? Infinity : Math.abs(time - data.placedAt);
+  const due = elapsed >= glideStepMs(zoom) / 2 || (data.placedVersion !== version && elapsed >= 150);
+  if (due) {
+    data.placedAt = time;
+    data.placedVersion = version;
+  }
+  return due;
+}
+
 /** Place chaque véhicule à l'instant `time` ; renvoie vrai si au moins un a bougé. */
 function place(data: TransitData, time: number, terrain: { elevation(lon: number, lat: number): number; version: number }, bounds: readonly [number, number, number, number]): boolean {
   let moved = false;
@@ -864,6 +891,17 @@ function labelledNetworks(data: TransitData, zoom: number, bucket: number): Netw
     networkLabelCache = { data, band, bucket, networks: kept };
   }
   return networkLabelCache.networks;
+}
+
+let denseCache: { vehicles: Vehicle[]; sparse: Vehicle[]; dense: Vehicle[] } | undefined;
+
+/** Les véhicules en deux groupes : les bus des très gros réseaux (`DENSE_NETWORK`), et tous les autres. Calculé une fois par liste de véhicules. */
+function splitDense(vehicles: Vehicle[]): { sparse: Vehicle[]; dense: Vehicle[] } {
+  if (denseCache?.vehicles !== vehicles) {
+    const isDense = (v: Vehicle) => v.line.kind === 'bus' && v.line.network.count > DENSE_NETWORK;
+    denseCache = { vehicles, sparse: vehicles.filter((v) => !isDense(v)), dense: vehicles.filter(isDense) };
+  }
+  return denseCache;
 }
 
 /** Longueur minimale à l'écran d'un bus (pixels) : les autres modes en gardent la proportion réelle. */
@@ -1031,14 +1069,18 @@ export const transit = defineModule<TransitData>({
         v.position[2] = terrain.elevation(v.position[0], v.position[1]) + ICON_LIFT_M;
         v.groundVersion = terrain.version;
       }
-    } else if (place(data, time, terrain, view.bounds())) {
+    } else if (placeDue(data, time, terrain.version, view.zoom) && place(data, time, terrain, view.bounds())) {
       data.motion++;
     }
+    const models0 = wants3d(settings) && view.zoom >= MESH_FROM_ZOOM;
     const icons = atlas();
     const pickedVehicle = chosen?.type === 'vehicle' ? data.byKey.get(chosen.key) : undefined;
     const picked = pickedVehicle?.here === false ? undefined : pickedVehicle; // en relecture, un véhicule absent n'a pas de position à cet instant
+    // Bus des très gros réseaux : absents de loin, petits et sans contour de près, comme les autres à partir du zoom 14 (voir `DENSE_NETWORK`).
+    const split = splitDense(data.vehicles);
+    const thinned = !models0 && view.zoom < DENSE_BUS_FULL_ZOOM && split.dense.length > 0;
     const common = {
-      data: data.vehicles,
+      data: thinned ? split.sparse : data.vehicles,
       iconAtlas: icons.atlas,
       iconMapping: icons.mapping,
       getPosition: (v: Vehicle) => v.position,
@@ -1054,7 +1096,7 @@ export const transit = defineModule<TransitData>({
       parameters,
     };
     const moving = { getPosition: [data.motion, terrain.version], getAngle: data.motion };
-    const models = wants3d(settings) && view.zoom >= MESH_FROM_ZOOM;
+    const models = models0;
     // Maquettes : taille réelle de près ; de loin, la même longueur minimale à l'écran que les silhouettes.
     const metersPerPixel = (lat: number) => (156_543 * Math.cos((lat * Math.PI) / 180)) / 2 ** view.zoom;
     const grow = (v: Vehicle) => {
@@ -1128,6 +1170,18 @@ export const transit = defineModule<TransitData>({
         getColor: (v) => v.halo,
         updateTriggers: moving,
       }),
+      thinned &&
+        view.zoom >= DENSE_BUS_FROM_ZOOM &&
+        new IconLayer<Vehicle>({
+          ...common,
+          id: 'transports/bus-nombreux',
+          data: split.dense,
+          getIcon: (v) => `${v.line.kind}-fill`,
+          getColor: (v) => v.fill,
+          sizeMinPixels: common.sizeMinPixels * 0.55,
+          pickable: true,
+          updateTriggers: moving,
+        }),
       !models &&
       new IconLayer<Vehicle>({
         ...common,
