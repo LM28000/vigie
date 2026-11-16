@@ -39,10 +39,14 @@
 //! - `IDFM_MODES` : modes gardés, `metro,tram,train,cable` par défaut ; ajouter `bus` pour les bus (≈ 75 000 courses par jour) ;
 //! - `IDFM_INTERVALLE_S` : intervalle de relevé du SIRI (180 par défaut, 120 au minimum) ;
 //! - `IDFM_MEMOIRE_MO` : budget de mémoire des horaires de ce réseau (100 par défaut) ;
-//! - `IDFM_GTFS_URL` : adresse du GTFS (celle d'IDFM par défaut).
+//! - `IDFM_GTFS_URL` : adresse du GTFS (celle d'IDFM par défaut) ;
+//! - `IDFM_SIRI_FICHIERS` (tests) : réponses SIRI déjà enregistrées (`1.json.gz,2.json.gz`), rejouées à la place de la requête à PRIM : aucune
+//!   requête n'est envoyée, le quota n'est pas touché. L'instant de chaque réponse est lu dans le fichier `1.at` voisin (secondes UTC) ; à
+//!   chaque relevé on prend la plus récente qui ne soit pas dans le futur de l'horloge (voir `TRANSPORTS_DECALAGE_S`).
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufReader, Read};
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -83,6 +87,8 @@ pub struct Config {
     pub every: Duration,
     pub memory_limit: usize,
     pub gtfs_url: String,
+    /// Test : réponses SIRI enregistrées, rejouées à la place de la requête à PRIM (`IDFM_SIRI_FICHIERS`, voir `replay_time`). Vide en production.
+    pub replay: Vec<PathBuf>,
 }
 
 impl Config {
@@ -96,7 +102,8 @@ impl Config {
         let every = std::env::var("IDFM_INTERVALLE_S").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(DEFAULT_EVERY_S).max(MIN_EVERY_S);
         let memory_mb: usize = std::env::var("IDFM_MEMOIRE_MO").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(100);
         let gtfs_url = std::env::var("IDFM_GTFS_URL").ok().filter(|u| u.starts_with("https://")).unwrap_or_else(|| DEFAULT_GTFS_URL.to_string());
-        Some(Self { key: key.into(), modes, every: Duration::from_secs(every), memory_limit: memory_mb << 20, gtfs_url })
+        let replay = std::env::var("IDFM_SIRI_FICHIERS").ok().map(|v| v.split(',').map(str::trim).filter(|f| !f.is_empty()).map(PathBuf::from).collect()).unwrap_or_default();
+        Some(Self { key: key.into(), modes, every: Duration::from_secs(every), memory_limit: memory_mb << 20, gtfs_url, replay })
     }
 
     pub fn key(&self) -> &str {
@@ -133,6 +140,45 @@ pub fn decorate(schedule: &mut Schedule) {
 
 // ───────────────────────── Lecture du SIRI ─────────────────────────
 
+/// Instant d'une réponse SIRI enregistrée : le contenu de `<nom>.at` (le fichier `1.json.gz` a son `1.at`), sinon l'heure de sa dernière modification.
+pub fn replay_time(file: &Path) -> i64 {
+    let companion = file.with_extension("").with_extension("at");
+    std::fs::read_to_string(companion)
+        .ok()
+        .and_then(|t| t.trim().parse().ok())
+        .or_else(|| std::fs::metadata(file).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64))
+        .unwrap_or(0)
+}
+
+/// Un `Read` alimenté par les morceaux du corps HTTP qu'un autre morceau de code envoie (tâche asynchrone → tâche bloquante du décodeur).
+pub struct ChannelReader {
+    rx: tokio::sync::mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    chunk: Vec<u8>,
+    at: usize,
+}
+
+impl ChannelReader {
+    pub fn new(rx: tokio::sync::mpsc::Receiver<std::io::Result<Vec<u8>>>) -> Self {
+        Self { rx, chunk: Vec::new(), at: 0 }
+    }
+}
+
+impl Read for ChannelReader {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        while self.at >= self.chunk.len() {
+            match self.rx.blocking_recv() {
+                Some(Ok(chunk)) => (self.chunk, self.at) = (chunk, 0),
+                Some(Err(error)) => return Err(error),
+                None => return Ok(0),
+            }
+        }
+        let n = out.len().min(self.chunk.len() - self.at);
+        out[..n].copy_from_slice(&self.chunk[self.at..self.at + n]);
+        self.at += n;
+        Ok(n)
+    }
+}
+
 /// Un arrêt, par son numéro : `area` pour une zone d'arrêt SNCF (`StopArea:SP`), sinon un quai (`StopPoint:Q`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct StopCode {
@@ -140,34 +186,56 @@ pub struct StopCode {
     n: u32,
 }
 
+/// Heure absente d'un `Call`.
+const NO_TIME: u32 = u32::MAX;
+
+/// Un arrêt annoncé. Les quatre heures (secondes UTC) tiennent sur 32 bits : un `Call` pèse 32 octets, pas 90 (une réponse en
+/// compte 165 000, dont l'essentiel est gardé le temps du rapprochement).
 #[derive(Clone, Copy, Debug)]
 pub struct Call {
     stop: StopCode,
     quay: Option<StopCode>,
-    aimed_arrival: Option<i64>,
-    aimed_departure: Option<i64>,
-    arrival: Option<i64>,
-    departure: Option<i64>,
+    /// Arrivée théorique, départ théorique, arrivée annoncée, départ annoncé.
+    times: [u32; 4],
 }
 
 impl Call {
+    pub fn new(stop: StopCode, quay: Option<StopCode>, aimed_arrival: Option<i64>, aimed_departure: Option<i64>, arrival: Option<i64>, departure: Option<i64>) -> Self {
+        let pack = |t: Option<i64>| t.and_then(|t| u32::try_from(t).ok()).filter(|t| *t != NO_TIME).unwrap_or(NO_TIME);
+        Self { stop, quay, times: [pack(aimed_arrival), pack(aimed_departure), pack(arrival), pack(departure)] }
+    }
+    fn at(&self, i: usize) -> Option<i64> {
+        Some(self.times[i]).filter(|t| *t != NO_TIME).map(i64::from)
+    }
+    fn aimed_arrival(&self) -> Option<i64> {
+        self.at(0)
+    }
+    fn aimed_departure(&self) -> Option<i64> {
+        self.at(1)
+    }
+    fn arrival(&self) -> Option<i64> {
+        self.at(2)
+    }
+    fn departure(&self) -> Option<i64> {
+        self.at(3)
+    }
     /// Heure annoncée (arrivée, sinon départ) pour classer et comparer.
     fn expected(&self) -> Option<i64> {
-        self.arrival.or(self.departure)
+        self.arrival().or(self.departure())
     }
     fn aimed(&self) -> Option<i64> {
-        self.aimed_arrival.or(self.aimed_departure)
+        self.aimed_arrival().or(self.aimed_departure())
     }
 }
 
 #[derive(Debug)]
 pub struct Journey {
     /// `route_id` GTFS (`IDFM:C01371`).
-    route: String,
+    route: Box<str>,
     /// Fin de `DatedVehicleJourneyRef`, entre `::` et `:LOC`.
-    short_ref: String,
+    short_ref: Box<str>,
     destination: Option<StopCode>,
-    calls: Vec<Call>,
+    calls: Box<[Call]>,
 }
 
 #[derive(Deserialize, Default)]
@@ -227,12 +295,16 @@ fn time(text: &Option<String>) -> Option<i64> {
     text.as_deref()?.parse::<Timestamp>().ok().map(|t| t.as_second())
 }
 
-fn convert(raw: RawJourney) -> Option<Journey> {
-    // `STIF:Line::C01371:` → `IDFM:C01371`
-    let line = raw.line_ref.value?;
-    let id = line.split(':').nth(3).filter(|id| !id.is_empty())?;
+/// Le `route_id` GTFS d'un `LineRef` : `STIF:Line::C01371:` → `IDFM:C01371`.
+fn route_of(line_ref: &Val) -> Option<String> {
+    let id = line_ref.value.as_deref()?.split(':').nth(3).filter(|id| !id.is_empty())?;
+    Some(format!("IDFM:{id}"))
+}
+
+/// Convertit une circulation (déjà reconnue : `route` est celui de sa ligne) ; `None` si aucun arrêt n'est exploitable.
+fn convert(route: String, raw: RawJourney) -> Option<Journey> {
     let reference = raw.dated_vehicle_journey_ref.value?;
-    let short_ref = reference.split_once("::").map_or(reference.as_str(), |(_, rest)| rest.rsplit_once(':').map_or(rest, |(id, _)| id)).to_string();
+    let short_ref = reference.split_once("::").map_or(reference.as_str(), |(_, rest)| rest.rsplit_once(':').map_or(rest, |(id, _)| id));
     let calls: Vec<Call> = raw
         .estimated_calls
         .estimated_call
@@ -240,87 +312,124 @@ fn convert(raw: RawJourney) -> Option<Journey> {
         .filter(|c| !is_cancelled(&c.arrival_status) && !is_cancelled(&c.departure_status))
         .filter_map(|c| {
             let quay = [&c.arrival_stop_assignment, &c.departure_stop_assignment].into_iter().flatten().find_map(|a| a.expected_quay_ref.value.as_deref().and_then(stop_code));
-            let call = Call {
-                stop: c.stop_point_ref.value.as_deref().and_then(stop_code)?,
+            let call = Call::new(
+                c.stop_point_ref.value.as_deref().and_then(stop_code)?,
                 quay,
-                aimed_arrival: time(&c.aimed_arrival_time),
-                aimed_departure: time(&c.aimed_departure_time),
-                arrival: time(&c.expected_arrival_time),
-                departure: time(&c.expected_departure_time),
-            };
+                time(&c.aimed_arrival_time),
+                time(&c.aimed_departure_time),
+                time(&c.expected_arrival_time),
+                time(&c.expected_departure_time),
+            );
             call.expected().or(call.aimed()).map(|_| call)
         })
         .collect();
     if calls.is_empty() {
         return None;
     }
-    Some(Journey { route: format!("IDFM:{id}"), short_ref, destination: raw.destination_ref.value.as_deref().and_then(stop_code), calls })
+    Some(Journey { route: route.into(), short_ref: short_ref.into(), destination: raw.destination_ref.value.as_deref().and_then(stop_code), calls: calls.into() })
 }
 
 fn is_cancelled(status: &Option<String>) -> bool {
     status.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("cancelled"))
 }
 
-/// Les circulations, converties une à une pendant la lecture (le JSON complet pèse 76 Mo : on ne le garde pas).
-struct Journeys(Vec<Journey>);
+/// Le chemin des circulations dans la réponse : `Siri.ServiceDelivery.EstimatedTimetableDelivery[].EstimatedJourneyVersionFrame[].EstimatedVehicleJourney[]`.
+enum Node {
+    Key(&'static str, &'static Node),
+    List(&'static Node),
+    Journeys,
+}
 
-impl<'de> Deserialize<'de> for Journeys {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Collect;
-        impl<'de> Visitor<'de> for Collect {
-            type Value = Journeys;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("une liste de circulations")
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Journeys, A::Error> {
-                let mut out = Vec::new();
-                while let Some(raw) = seq.next_element::<RawJourney>()? {
-                    out.extend(convert(raw));
-                }
-                Ok(Journeys(out))
-            }
+static PATH: Node = Node::Key(
+    "Siri",
+    &Node::Key("ServiceDelivery", &Node::Key("EstimatedTimetableDelivery", &Node::List(&Node::Key("EstimatedJourneyVersionFrame", &Node::List(&Node::Key("EstimatedVehicleJourney", &Node::Journeys)))))),
+);
+
+/// Ce que le décodage retient, circulation par circulation.
+struct Sink<'a> {
+    accept: &'a dyn Fn(&str) -> bool,
+    journeys: Vec<Journey>,
+    /// Circulations lues, gardées ou non.
+    seen: usize,
+}
+
+/// Lit la réponse en flux (`DeserializeSeed`) : on descend le long de `PATH` en sautant tout le reste, et chaque circulation est
+/// convertie, gardée si sa ligne est voulue, puis oubliée, sans jamais construire l'arborescence JSON (76 Mo de texte).
+struct Seed<'a, 'b> {
+    node: &'static Node,
+    sink: &'b mut Sink<'a>,
+}
+
+impl<'de> serde::de::DeserializeSeed<'de> for Seed<'_, '_> {
+    type Value = ();
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        match self.node {
+            Node::Key(..) => deserializer.deserialize_map(self),
+            Node::List(_) | Node::Journeys => deserializer.deserialize_seq(self),
         }
-        deserializer.deserialize_seq(Collect)
     }
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, rename_all = "PascalCase")]
-struct Frame {
-    estimated_vehicle_journey: Option<Journeys>,
+impl<'de> Visitor<'de> for Seed<'_, '_> {
+    type Value = ();
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("la réponse SIRI")
+    }
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        let Node::Key(name, next) = self.node else { return Ok(()) };
+        while let Some(key) = map.next_key::<std::borrow::Cow<str>>()? {
+            if key == *name {
+                map.next_value_seed(Seed { node: next, sink: &mut *self.sink })?;
+            } else {
+                map.next_value::<serde::de::IgnoredAny>()?;
+            }
+        }
+        Ok(())
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+        match self.node {
+            Node::List(next) => while seq.next_element_seed(Seed { node: next, sink: &mut *self.sink })?.is_some() {},
+            Node::Journeys => {
+                while let Some(raw) = seq.next_element::<RawJourney>()? {
+                    self.sink.seen += 1;
+                    if let Some(route) = route_of(&raw.line_ref).filter(|route| (self.sink.accept)(route))
+                        && let Some(journey) = convert(route, raw)
+                    {
+                        self.sink.journeys.push(journey);
+                    }
+                }
+            }
+            Node::Key(..) => {}
+        }
+        Ok(())
+    }
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, rename_all = "PascalCase")]
-struct Delivery {
-    estimated_journey_version_frame: Vec<Frame>,
+/// Les circulations décodées d'une réponse.
+pub struct Decoded {
+    pub journeys: Vec<Journey>,
+    /// Circulations de la réponse, gardées ou non.
+    pub seen: usize,
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, rename_all = "PascalCase")]
-struct ServiceDelivery {
-    estimated_timetable_delivery: Vec<Delivery>,
+/// Lit la réponse (JSON, éventuellement compressé en gzip) au fil de l'eau : le corps n'est jamais gardé en entier, ni décompressé
+/// en entier, et seules les circulations des lignes `accept` sont conservées (`journeys`).
+pub fn decode_siri(body: impl Read, accept: &dyn Fn(&str) -> bool) -> Result<Decoded> {
+    let mut reader = BufReader::with_capacity(1 << 16, body);
+    // Le début dit si le corps est compressé (gzip : 0x1f 0x8b) ; `fill_buf` ne consomme rien.
+    let gzip = reader.fill_buf().context("réponse SIRI illisible")?.starts_with(&[0x1f, 0x8b]);
+    let reader: Box<dyn Read + '_> = if gzip { Box::new(BufReader::with_capacity(1 << 16, flate2::bufread::GzDecoder::new(reader))) } else { Box::new(reader) };
+    let mut sink = Sink { accept, journeys: Vec::new(), seen: 0 };
+    let mut deserializer = serde_json::Deserializer::from_reader(reader);
+    serde::de::DeserializeSeed::deserialize(Seed { node: &PATH, sink: &mut sink }, &mut deserializer).context("réponse SIRI illisible")?;
+    deserializer.end().context("réponse SIRI illisible")?;
+    sink.journeys.shrink_to_fit();
+    Ok(Decoded { journeys: sink.journeys, seen: sink.seen })
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, rename_all = "PascalCase")]
-struct Siri {
-    service_delivery: ServiceDelivery,
-}
-
-#[derive(Deserialize, Default)]
-#[serde(default, rename_all = "PascalCase")]
-struct Root {
-    siri: Siri,
-}
-
-/// Lit la réponse (JSON, éventuellement compressé en gzip) ; ne garde que les circulations des lignes `accept`.
+/// `decode_siri` d'un corps déjà en mémoire.
 pub fn parse_siri(body: &[u8], accept: &dyn Fn(&str) -> bool) -> Result<Vec<Journey>> {
-    let reader: Box<dyn Read + '_> = if body.starts_with(&[0x1f, 0x8b]) { Box::new(flate2::read::GzDecoder::new(body)) } else { Box::new(body) };
-    let root: Root = serde_json::from_reader(BufReader::with_capacity(1 << 16, reader)).context("réponse SIRI illisible")?;
-    let mut journeys: Vec<Journey> = root.siri.service_delivery.estimated_timetable_delivery.into_iter().flat_map(|d| d.estimated_journey_version_frame).filter_map(|f| f.estimated_vehicle_journey).flat_map(|j| j.0).collect();
-    journeys.retain(|j| accept(&j.route));
-    Ok(journeys)
+    decode_siri(body, accept).map(|d| d.journeys)
 }
 
 // ───────────────────────── Rapprochement ─────────────────────────
@@ -355,7 +464,7 @@ struct Index<'a> {
     schedule: &'a Schedule,
     route_of: HashMap<&'a str, u32>,
     trips_of_route: Vec<Vec<u32>>,
-    /// Fin du `trip_id` (après le dernier `:`) → course.
+    /// Fin du `trip_id` (après le dernier `:`) → course, pour les seules fins que le SIRI annonce (17 000 entrées, pas les 150 000 courses).
     by_suffix: HashMap<&'a str, u32>,
     /// Numéro GTFS de chaque arrêt du modèle.
     code_of_stop: Vec<Option<StopCode>>,
@@ -363,14 +472,17 @@ struct Index<'a> {
 }
 
 impl<'a> Index<'a> {
-    fn new(schedule: &'a Schedule) -> Self {
+    fn new(schedule: &'a Schedule, journeys: &'a [Journey]) -> Self {
         let route_of = schedule.route_ids.iter().enumerate().map(|(i, id)| (&**id, i as u32)).collect();
         let mut trips_of_route = vec![Vec::new(); schedule.routes.len()];
-        let mut by_suffix = HashMap::with_capacity(schedule.trips.len());
+        let announced: HashSet<&str> = journeys.iter().map(|j| &*j.short_ref).collect();
+        let mut by_suffix = HashMap::with_capacity(announced.len());
         for (i, trip) in schedule.trips.iter().enumerate() {
             trips_of_route[trip.route as usize].push(i as u32);
-            if let Some((_, suffix)) = trip.id.rsplit_once(':') {
-                by_suffix.insert(suffix, i as u32);
+            if let Some((_, suffix)) = trip.id.rsplit_once(':')
+                && let Some(&wanted) = announced.get(suffix)
+            {
+                by_suffix.insert(wanted, i as u32);
             }
         }
         let code_of_stop: Vec<Option<StopCode>> = schedule.stops.iter().map(|s| gtfs_stop_code(&s.id)).collect();
@@ -453,17 +565,44 @@ impl<'a> Index<'a> {
     }
 }
 
+/// Ce que le rapprochement a décidé pour une circulation (pour les mesures : `idf/measure.rs`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Verdict {
+    /// Course (rang dans `Schedule::trips`) trouvée par son identifiant.
+    ById { trip: u32 },
+    /// Course trouvée par ses arrêts et ses heures, avec son écart (s).
+    ByStops { trip: u32, score: f32 },
+    /// La ligne n'est pas dans le modèle.
+    UnknownRoute,
+    /// Aucun arrêt annoncé n'est connu du GTFS.
+    NoKnownStop,
+    /// Aucune course de la ligne n'est en circulation à ces heures (fenêtre de `WINDOW_S`).
+    NoTripInWindow,
+    /// Des courses sont en circulation mais aucune ne convient (arrêts non desservis, sens inverse, écart trop grand) ; `best` est le
+    /// meilleur écart trouvé malgré la limite, `None` si aucune n'a pu être notée.
+    NoCandidate { best: Option<f32> },
+    /// Des courses convenaient mais un autre véhicule, mieux ajusté, les a prises.
+    Taken,
+}
+
 /// Convertit les circulations du SIRI en mises à jour de courses du GTFS `schedule` (voir l'en-tête du module).
 pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (Realtime, Stats) {
-    let index = Index::new(schedule);
+    let (realtime, stats, _) = match_detailed(schedule, journeys, now);
+    (realtime, stats)
+}
+
+/// Comme `match_journeys`, avec le verdict pour chaque circulation (dans l'ordre de `journeys`).
+pub fn match_detailed(schedule: &Schedule, journeys: &[Journey], now: i64) -> (Realtime, Stats, Vec<Verdict>) {
+    let index = Index::new(schedule, journeys);
+    let mut verdicts: Vec<Verdict> = vec![Verdict::UnknownRoute; journeys.len()];
     let mut stats = Stats { journeys: journeys.len(), ..Stats::default() };
     let mut chosen: Vec<Option<(Candidate, bool)>> = vec![None; journeys.len()];
     let mut claimed: HashSet<(u32, usize)> = HashSet::new();
 
     // 1. Identifiant direct.
     for (j, journey) in journeys.iter().enumerate() {
-        let Some(&route) = index.route_of.get(journey.route.as_str()) else { continue };
-        let Some(&trip_index) = index.by_suffix.get(journey.short_ref.as_str()) else { continue };
+        let Some(&route) = index.route_of.get(&*journey.route) else { continue };
+        let Some(&trip_index) = index.by_suffix.get(&*journey.short_ref) else { continue };
         let trip = &schedule.trips[trip_index as usize];
         if trip.route != route {
             continue;
@@ -480,6 +619,7 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
             continue;
         }
         chosen[j] = Some((Candidate { trip: trip_index, day, score: 0.0 }, true));
+        verdicts[j] = Verdict::ById { trip: trip_index };
         stats.by_id += 1;
     }
 
@@ -489,8 +629,9 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
         if chosen[j].is_some() {
             continue;
         }
-        let Some(&route) = index.route_of.get(journey.route.as_str()) else { continue };
+        let Some(&route) = index.route_of.get(&*journey.route) else { continue };
         if !journey.calls.iter().any(|c| index.stop_is_known(c)) {
+            verdicts[j] = Verdict::NoKnownStop;
             continue;
         }
         let times: Vec<i64> = journey.calls.iter().filter_map(|c| c.aimed().or(c.expected())).collect();
@@ -498,6 +639,7 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
         let aimed = journey.calls.iter().any(|c| c.aimed().is_some());
         let limit = if aimed { MAX_SCORE_AIMED_S } else { MAX_SCORE_S };
         let mut found: Vec<Candidate> = Vec::new();
+        let (mut in_window, mut best_any) = (false, None::<f64>);
         for &trip_index in &index.trips_of_route[route as usize] {
             let trip = &schedule.trips[trip_index as usize];
             for day in 0..3 {
@@ -509,8 +651,12 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
                 if end < first - WINDOW_S || start > last + WINDOW_S {
                     continue;
                 }
-                if let Some(score) = index.score(journey, trip, day).filter(|s| *s <= limit) {
-                    found.push(Candidate { trip: trip_index, day, score });
+                in_window = true;
+                if let Some(score) = index.score(journey, trip, day) {
+                    best_any = Some(best_any.map_or(score, |b| b.min(score)));
+                    if score <= limit {
+                        found.push(Candidate { trip: trip_index, day, score });
+                    }
                 }
             }
         }
@@ -518,13 +664,18 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
         found.truncate(4);
         if !found.is_empty() {
             candidates.push((j, found));
+        } else {
+            verdicts[j] = if in_window { Verdict::NoCandidate { best: best_any.map(|b| b as f32) } } else { Verdict::NoTripInWindow };
         }
     }
     candidates.sort_by(|a, b| a.1[0].score.total_cmp(&b.1[0].score));
     for (j, found) in candidates {
         if let Some(c) = found.into_iter().find(|c| claimed.insert((c.trip, c.day))) {
             chosen[j] = Some((c, false));
+            verdicts[j] = Verdict::ByStops { trip: c.trip, score: c.score as f32 };
             stats.by_stops += 1;
+        } else {
+            verdicts[j] = Verdict::Taken;
         }
     }
     stats.unmatched = journeys.len() - stats.by_id - stats.by_stops;
@@ -543,11 +694,11 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
                 let pattern = &schedule.patterns[trip.pattern as usize];
                 // Avec l'heure théorique, le retard est exact ; sans elle, on donne l'heure prévue.
                 let event = |expected: Option<i64>, aimed: Option<i64>| match (expected, aimed) {
-                    (Some(e), Some(a)) => Some(Event { delay: i32::try_from(e - a).ok(), time: None }),
-                    (Some(e), None) => Some(Event { delay: None, time: Some(e) }),
+                    (Some(e), Some(a)) => Some(Event::new(i32::try_from(e - a).ok(), None)),
+                    (Some(e), None) => Some(Event::new(None, Some(e))),
                     _ => None,
                 };
-                let (arrival, departure) = (event(call.arrival, call.aimed_arrival), event(call.departure, call.aimed_departure));
+                let (arrival, departure) = (event(call.arrival(), call.aimed_arrival()), event(call.departure(), call.aimed_departure()));
                 (arrival.is_some() || departure.is_some()).then_some(StopUpdate { stop_sequence: Some(pattern.seq[i]), stop_id: None, arrival, departure })
             })
             .collect();
@@ -557,7 +708,7 @@ pub fn match_journeys(schedule: &Schedule, journeys: &[Journey], now: i64) -> (R
         let delay_known = journey.calls.iter().any(|c| c.aimed().is_some());
         trips.entry(trip.id.to_string()).or_default().push(TripUpdate { start_date: Some(schedule.dates[candidate.day]), canceled: false, stops, delay_known });
     }
-    (Realtime { fetched_at: now, trips }, stats)
+    (Realtime { fetched_at: now, trips }, stats, verdicts)
 }
 
 #[cfg(test)]

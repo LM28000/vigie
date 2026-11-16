@@ -63,7 +63,7 @@ fn decode_le_temps_reel_reel_de_tisseo() {
     assert_eq!((stop.stop_sequence, stop.stop_id.as_deref()), (Some(24), Some("stop_point:SP_1268")));
     // Le flux donne une heure (juste) et un retard (faux de 24 h) : l'heure prévaut.
     assert_eq!(stop.arrival.unwrap().delay_from(1_794_270_060), Some(-19));
-    assert_eq!(stop.arrival.unwrap().delay, Some(-86_419));
+    assert_eq!(stop.arrival.unwrap().delay(), Some(-86_419));
     assert!(decode_realtime(b"\xff\xff", 0).is_err());
     assert_eq!(parse_date("20261110").map(|d| d.to_string()).as_deref(), Some("2026-11-10"));
     assert_eq!(parse_date("0"), None);
@@ -186,7 +186,7 @@ fn le_tram_de_jour_a_sa_place_sur_la_reponse() {
         built_at: Mutex::default(),
     });
     let now = fixture::paris("2026-11-10T22:30:00");
-    let out = assemble(std::slice::from_ref(&slot), now, false);
+    let out = assemble(std::slice::from_ref(&slot), now, false, false);
     assert_eq!((out.networks.len(), out.lines.len(), out.vehicles.len()), (1, 1, 1));
     assert_eq!(out.est_step, Some(PATH_STEP_S));
     let json = serde_json::to_value(&out).unwrap();
@@ -201,7 +201,7 @@ fn le_tram_de_jour_a_sa_place_sur_la_reponse() {
     // 22:30 : entre le 3e arrêt (22:29) et le 4e (22:31), en route.
     assert_eq!(v["speed"].as_u64().map(|s| s > 5 && s < 70), Some(true), "{v}");
     // Le tram n'est plus là à 23:30, après son terminus (23:09).
-    assert!(assemble(&[slot], fixture::paris("2026-11-10T23:30:00"), false).vehicles.is_empty());
+    assert!(assemble(&[slot], fixture::paris("2026-11-10T23:30:00"), false, false).vehicles.is_empty());
 }
 
 #[test]

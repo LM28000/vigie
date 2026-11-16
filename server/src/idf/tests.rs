@@ -43,7 +43,7 @@ IDFM:TER:1,12:10:00,12:10:00,IDFM:monomodalStopPlace:200,0\n\
 IDFM:TER:1,12:20:00,12:20:00,IDFM:monomodalStopPlace:201,1\n";
 
 pub(crate) fn config(modes: &[&str]) -> Config {
-    Config { key: "clé-de-test".into(), modes: modes.iter().map(|m| m.to_string()).collect(), every: Duration::from_secs(180), memory_limit: 100 << 20, gtfs_url: DEFAULT_GTFS_URL.into() }
+    Config { key: "clé-de-test".into(), modes: modes.iter().map(|m| m.to_string()).collect(), every: Duration::from_secs(180), memory_limit: 100 << 20, gtfs_url: DEFAULT_GTFS_URL.into(), replay: Vec::new() }
 }
 
 /// Le GTFS d'Île-de-France de poche, construit pour le 10 novembre 2026 à midi, heure de Paris.
@@ -120,10 +120,10 @@ fn le_siri_est_lu_en_flux_et_filtre_par_ligne() {
     ]);
     let all = parse_siri(&body, &|_| true).unwrap();
     assert_eq!(all.len(), 2);
-    assert_eq!(all[0].route, "IDFM:C01371");
-    assert_eq!(all[0].short_ref, "20261110.235.R.C01371");
+    assert_eq!(&*all[0].route, "IDFM:C01371");
+    assert_eq!(&*all[0].short_ref, "20261110.235.R.C01371");
     assert_eq!(all[0].destination, Some(StopCode { area: false, n: 100 }));
-    assert_eq!(all[1].short_ref, "3853623");
+    assert_eq!(&*all[1].short_ref, "3853623");
     let metro = parse_siri(&body, &|route| route == "IDFM:C01371").unwrap();
     assert_eq!(metro.len(), 1);
     // Le même JSON compressé.
@@ -164,7 +164,7 @@ fn le_metro_est_rapproche_par_ses_arrets_et_son_sens() {
     assert!(!a.delay_known, "sans heure théorique dans le SIRI, le retard n'est pas affiché");
     assert_eq!(a.stops.len(), 2);
     let at_101 = a.stops.iter().find(|s| s.stop_sequence == Some(1)).unwrap();
-    assert_eq!(at_101.arrival.unwrap().time, Some(fixture::paris("2026-11-10T12:02:30")));
+    assert_eq!(at_101.arrival.unwrap().time(), Some(fixture::paris("2026-11-10T12:02:30")));
     assert!(realtime.trips.contains_key("IDFM:RATP:B") && !realtime.trips.contains_key("IDFM:RATP:C"));
 }
 
@@ -205,7 +205,7 @@ fn le_rer_est_rapproche_par_identifiant_et_son_retard_est_exact() {
     assert_eq!(stats.by_id, 1);
     let update = &realtime.trips[&format!("IDFM:TN:SNCF:{uuid}")][0];
     assert!(update.delay_known);
-    assert_eq!(update.stops.iter().map(|s| s.departure.unwrap().delay).collect::<Vec<_>>(), [Some(120), Some(180)]);
+    assert_eq!(update.stops.iter().map(|s| s.departure.unwrap().delay()).collect::<Vec<_>>(), [Some(120), Some(180)]);
 }
 
 // ───────────────────────── Bus ─────────────────────────
@@ -270,7 +270,7 @@ fn des_bus_qui_se_suivent_a_dix_minutes_sont_chacun_rapproches_de_leur_course() 
     let (realtime, stats) = match_journeys(&schedule, &journeys, now);
     assert_eq!((stats.journeys, stats.by_stops, stats.unmatched), (3, 3, 0));
     // Chacun a la course dont l'heure *théorique* est la sienne, quel que soit son retard : 6 minutes de retard ne font pas du 1er le 2e.
-    let delay_at = |trip: &str, sequence: u32| realtime.trips[trip][0].stops.iter().find(|s| s.stop_sequence == Some(sequence)).unwrap().arrival.unwrap().delay;
+    let delay_at = |trip: &str, sequence: u32| realtime.trips[trip][0].stops.iter().find(|s| s.stop_sequence == Some(sequence)).unwrap().arrival.unwrap().delay();
     assert_eq!(delay_at("IDFM:BUS:1", 1), Some(360));
     assert_eq!(delay_at("IDFM:BUS:2", 1), Some(60));
     assert_eq!(delay_at("IDFM:BUS:3", 1), Some(0));
