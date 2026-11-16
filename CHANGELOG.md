@@ -2,6 +2,10 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 16 novembre 2026 — Satellite du jour
+
+- **Satellite du jour** (Ciel et espace) : la France vue par NOAA-20 (défaut), NOAA-21, Terra ou Aqua, d'après NASA GIBS (tuiles WMTS sans clé, CORS ouvert : client seulement), en vraies couleurs ou « neige et feux » (fausses couleurs). Date liée à la frise du temps (jour UTC) ; pour aujourd'hui, repli sur la veille tant que la mosaïque ne couvre pas la France. Surzoom au-delà du niveau 9, drapé sur le relief, sous bâtiments et noms, bandeau et fiche avec date et satellite ([docs/couches.md](docs/couches.md#satellite-du-jour--source-et-choix)).
+
 ## 16 novembre 2026 — Bus d'Île-de-France activés
 
 - **Bus d'Île-de-France activés par défaut** (`IDFM_MODES=metro,tram,train,cable,bus`, retirables) : ≈ +45 Mo en permanence, pire cumulé estimé à 805 Mo avec les tuiles, sous le seuil de 850 Mo ([mesures](docs/couches.md#bus-dîle-de-france--mesures-et-décision)).
