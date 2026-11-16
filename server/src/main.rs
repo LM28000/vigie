@@ -3,7 +3,7 @@
 //! - charge les horaires SNCF (GTFS) et les remet à jour quand la SNCF en publie de nouveaux ;
 //! - interroge le flux temps réel SNCF (GTFS-RT) toutes les 30 secondes, et l'archive si demandé ;
 //! - calcule le tracé réel des trains sur les voies OpenStreetMap, avec leur altitude ;
-//! - rassemble les vélos en libre-service de France (GBFS) et les feux détectés par satellite ;
+//! - rassemble les vélos en libre-service de France (GBFS), les places libres des parkings des villes qui les publient et les feux détectés par satellite ;
 //! - relève les éléments orbitaux des satellites (CelesTrak), que le navigateur propage lui-même ;
 //! - rassemble les bus, trams et métros en direct des réseaux qui publient leurs positions ;
 //! - relève le champ de vent (Open-Meteo, modèle ARPEGE) toutes les 6 heures ;
@@ -45,6 +45,7 @@ mod monuments;
 mod webcams;
 mod multimodal;
 mod network;
+mod parkings;
 mod jamming;
 mod planes;
 mod raptor;
@@ -123,6 +124,7 @@ async fn main() -> Result<()> {
     tokio::spawn(timetable::refresh_forever(http.clone(), config.data_dir.clone(), state.clone()));
     tokio::spawn(tracks::build_forever(http.clone(), config.data_dir.clone(), state.clone()));
     tokio::spawn(bikes::poll_forever(http.clone(), state.clone()));
+    tokio::spawn(parkings::poll_forever(http.clone()));
     tokio::spawn(fires::poll_forever(http.clone(), state.clone()));
     tokio::spawn(planes::poll_forever(http.clone(), state.clone()));
     tokio::spawn(ships::poll_forever(state.clone()));

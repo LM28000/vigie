@@ -1,0 +1,41 @@
+{
+ "total_count": 13,
+ "results": [
+  {
+   "identifiant": 10,
+   "nom": "Henri Dunant (Surface)",
+   "etat": "Invalide",
+   "places_libres": null,
+   "capacite_maximale": 48,
+   "horodatage": "2025-04-06T02:15:00+00:00",
+   "point_geo": {
+    "lon": 3.0897659,
+    "lat": 45.7619968
+   }
+  },
+  {
+   "identifiant": 8,
+   "nom": "Médiatheque",
+   "etat": "Valide",
+   "places_libres": 101,
+   "capacite_maximale": 113,
+   "horodatage": "2026-11-16T13:48:01+00:00",
+   "point_geo": {
+    "lon": 3.08368,
+    "lat": 45.77484
+   }
+  },
+  {
+   "identifiant": 12,
+   "nom": "Gambetta (Surface)",
+   "etat": "Valide",
+   "places_libres": 57,
+   "capacite_maximale": 265,
+   "horodatage": "2026-11-16T13:48:03+00:00",
+   "point_geo": {
+    "lon": 3.081420744492292,
+    "lat": 45.771536518909095
+   }
+  }
+ ]
+}

@@ -2,6 +2,7 @@
 //!
 //! - `GET /api/health` : état du serveur (horaires chargés, fraîcheur du temps réel).
 //! - `GET /api/velos` : stations de vélos en libre-service de France, avec vélos et places disponibles.
+//! - `GET /api/parkings` : places libres des parkings et parcs relais des villes qui les publient ; `GET /api/parkings/courbe?id=…` : leur courbe des dernières 24 heures.
 //! - `GET /api/feux` : feux détectés par satellite sur 7 jours.
 //! - `GET /api/bateaux` : navires autour de la France (AIS, aisstream.io), toutes les 10 s.
 //! - `GET /api/avions` : avions en vol au-dessus de la France (adsb.lol), mis à jour toutes les 10 s ; chaque avion dit s'il est militaire (`military`).
@@ -72,6 +73,8 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/arrets", get(extras_version))
         .route("/api/arrets/{version}", get(extras_stops))
         .route("/api/velos", get(|State(state): State<AppState>| async move { prepared(state.bikes(), "vélos") }))
+        .route("/api/parkings", get(|| async { crate::parkings::response() }))
+        .route("/api/parkings/courbe", get(crate::parkings::curve))
         .route("/api/feux", get(|State(state): State<AppState>| async move { prepared(state.fires(), "feux") }))
         .route("/api/avions", get(|State(state): State<AppState>| async move { prepared(state.planes(), "avions") }))
         .route("/api/brouillage", get(|State(state): State<AppState>| async move { prepared(state.jamming(), "brouillage GPS") }))

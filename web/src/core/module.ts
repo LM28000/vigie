@@ -191,6 +191,10 @@ export interface InfoChart {
   marks?: ReadonlyArray<{ t: number; value: number; high: boolean; estimated?: boolean }>;
   /** Texte alternatif de la courbe, pour les lecteurs d'écran. */
   summary: string;
+  /** Vrai pour un compte (places libres) : l'axe vertical part de 0 et se gradue en entiers. */
+  integer?: boolean;
+  /** Pas des repères horaires, en heures (12 par défaut ; 4 pour une courbe d'une journée). */
+  hourStep?: number;
 }
 
 /**
