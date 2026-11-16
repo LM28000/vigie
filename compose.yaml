@@ -35,7 +35,7 @@ services:
       IDFM_PRIM_API_KEY: "${IDFM_PRIM_API_KEY:-}"
       # Vide = webcams Windy de la couche « Caméras » désactivées. Clé Windy Webcams : elle ne sort jamais du serveur.
       WINDY_WEBCAMS_KEY: "${WINDY_WEBCAMS_KEY:-}"
-      # Facultatifs : modes (« metro,tram,train,cable » par défaut ; ajouter « bus » demande +80 Mo en permanence et +175 Mo de pic : voir docs/couches.md, pas avec 1 Go), intervalle du relevé en secondes (180), budget de mémoire en Mo (100).
+      # Facultatifs : modes (« metro,tram,train,cable,bus » par défaut ; retirer « bus » économise ≈ 50 Mo en permanence : voir docs/couches.md), intervalle du relevé en secondes (180), budget de mémoire en Mo (100).
       IDFM_MODES: "${IDFM_MODES:-}"
       IDFM_INTERVALLE_S: "${IDFM_INTERVALLE_S:-}"
       IDFM_MEMOIRE_MO: "${IDFM_MEMOIRE_MO:-}"

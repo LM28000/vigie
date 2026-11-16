@@ -163,7 +163,7 @@ server/                le serveur (Rust : tokio, axum)
   src/tiles/           moteur de tuiles vectorielles : mvt.rs, pmtiles.rs, geom.rs, proj.rs, builder.rs, serve.rs ; jeux population.rs, couverture.rs (ARCEP) et dvf.rs (prix de l'immobilier, source dvf_source.rs), grille des isochrones popgrid.rs ; jeu élections (polygones) elections.rs et ses formes elections_geo.rs
   src/transit.rs       bus, trams et métros en direct (flux GTFS-RT de transport.data.gouv.fr, noms de lignes lus dans routes.txt des GTFS)
   src/estimates.rs     positions estimées d'après les horaires en temps réel (GTFS compact dans gtfs_compact.rs)
-  src/idf.rs           Île-de-France : SIRI global de PRIM rapproché du GTFS d'IDFM (voir [Bus d'Île-de-France](couches.md#bus-dîle-de-france--mesures-et-recommandation))
+  src/idf.rs           Île-de-France : SIRI global de PRIM (décodé en flux) rapproché du GTFS d'IDFM (lu en flux, voir [Bus d'Île-de-France](couches.md#bus-dîle-de-france--mesures-et-décision))
   src/bikes.rs …       collecteurs des autres couches (vélos, feux…)
 data/                  données téléchargées (jamais versionnées)
 ```

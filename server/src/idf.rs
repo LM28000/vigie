@@ -36,7 +36,7 @@
 //!
 //! ## Variables d'environnement
 //! - `IDFM_PRIM_API_KEY` : clé PRIM (sans elle, le réseau est ignoré) ;
-//! - `IDFM_MODES` : modes gardés, `metro,tram,train,cable` par défaut ; ajouter `bus` pour les bus (≈ 75 000 courses par jour) ;
+//! - `IDFM_MODES` : modes gardés, `metro,tram,train,cable,bus` par défaut ; retirer `bus` (`IDFM_MODES=metro,tram,train,cable`) pour économiser ≈ 50 Mo en permanence ;
 //! - `IDFM_INTERVALLE_S` : intervalle de relevé du SIRI (180 par défaut, 120 au minimum) ;
 //! - `IDFM_MEMOIRE_MO` : budget de mémoire des horaires de ce réseau (100 par défaut) ;
 //! - `IDFM_GTFS_URL` : adresse du GTFS (celle d'IDFM par défaut) ;
@@ -100,7 +100,7 @@ impl Config {
             .ok()
             .map(|v| v.split(',').map(|m| m.trim().to_lowercase()).filter(|m| !m.is_empty()).collect())
             .filter(|v: &Vec<String>| !v.is_empty())
-            .unwrap_or_else(|| ["metro", "tram", "train", "cable"].map(String::from).to_vec());
+            .unwrap_or_else(|| ["metro", "tram", "train", "cable", "bus"].map(String::from).to_vec());
         let every = std::env::var("IDFM_INTERVALLE_S").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(DEFAULT_EVERY_S).max(MIN_EVERY_S);
         let memory_mb: usize = std::env::var("IDFM_MEMOIRE_MO").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(100);
         let gtfs_url = std::env::var("IDFM_GTFS_URL").ok().filter(|u| u.starts_with("https://")).unwrap_or_else(|| DEFAULT_GTFS_URL.to_string());

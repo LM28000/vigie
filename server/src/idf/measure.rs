@@ -86,7 +86,7 @@ fn next(state: &mut u64) -> u64 {
 #[ignore = "mesure sur le vrai GTFS d'IDFM (IDFM_ZIP) : voir l'en-tête du fichier"]
 fn mesure_gtfs_idfm() {
     let zip = std::path::PathBuf::from(std::env::var("IDFM_ZIP").expect("IDFM_ZIP : chemin du zip d'IDFM"));
-    let modes: Vec<String> = std::env::var("IDFM_MODES").unwrap_or_else(|_| "metro,tram,train,cable".into()).split(',').map(|m| m.trim().to_string()).collect();
+    let modes: Vec<String> = std::env::var("IDFM_MODES").unwrap_or_else(|_| "metro,tram,train,cable,bus".into()).split(',').map(|m| m.trim().to_string()).collect();
     let now = Timestamp::now().as_second();
     let config = Config { key: "mesure".into(), modes: modes.clone(), every: Duration::from_secs(180), memory_limit: 100 << 20, gtfs_url: DEFAULT_GTFS_URL.into(), replay: Vec::new() };
 
