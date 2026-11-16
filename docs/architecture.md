@@ -5,7 +5,7 @@ Vigie est composée de deux programmes :
 - un **site** (`web/`) en TypeScript, React 19, MapLibre GL JS 5.24 (fond de carte, relief, globe) et deck.gl 9.4 (couches de données, maquettes 3D), construit avec Vite ;
 - un **serveur** (`server/`) en Rust (édition 2024, tokio, axum), qui collecte et prépare les données, calcule (tracés de trains, isochrones RAPTOR, analyse de zone), enregistre l'historique, fabrique et sert ses propres tuiles vectorielles, et sert aussi le site construit.
 
-Le navigateur contacte directement quelques services ouverts sans clé : le fond de carte (OpenFreeMap), le relief (Mapterhorn), l'IGN Géoplateforme (photos anciennes, LiDAR HD, géocodage), RainViewer, EUMETView (foudre), Vigicrues, ODRÉ (éCO2mix), l'EMSC (séismes) et data.economie.gouv.fr (carburants). Toutes les autres sources passent par le serveur, qui garde les clés.
+Le navigateur contacte directement quelques services ouverts sans clé : le fond de carte (OpenFreeMap), le relief (Mapterhorn), l'IGN Géoplateforme (photos anciennes, LiDAR HD, géocodage), RainViewer, EUMETView (foudre), NASA GIBS (satellite du jour), Vigicrues, ODRÉ (éCO2mix), l'EMSC (séismes) et data.economie.gouv.fr (carburants). Toutes les autres sources passent par le serveur, qui garde les clés.
 
 ## Vue d'ensemble
 

@@ -1,0 +1,28 @@
+/* Bandeau « Satellite · NOAA-20, 15 nov. 2026 » posé sur la carte (voir satelliteImagery.ts). */
+.satellite-bandeau {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-6, 16px) + 96px);
+  transform: translateX(-50%);
+  z-index: 2;
+  height: 30px;
+  padding: 0 var(--space-5);
+  display: inline-flex;
+  align-items: center;
+  font: 600 12.5px/1 var(--font-body, system-ui, sans-serif);
+  letter-spacing: 0.01em;
+  color: var(--ui-ink, #f1f4f9);
+  background: var(--ui-glass-strong, rgb(11, 14, 21));
+  border: 1px solid var(--ui-line, rgba(255, 255, 255, 0.09));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--ui-shadow, 0 6px 18px rgba(0, 0, 0, 0.3));
+  white-space: nowrap;
+  cursor: pointer;
+}
+.satellite-bandeau:hover {
+  background: var(--ui-glass, rgb(14, 18, 27));
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.satellite-bandeau[hidden] {
+  display: none;
+}
