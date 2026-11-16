@@ -1,0 +1,57 @@
+{
+ "total_count": 80,
+ "results": [
+  {
+   "nom": "Saint-Jérôme",
+   "commune": "MARSEILLE",
+   "typeparking": "P + R",
+   "tempsreel": "True",
+   "voitureplacescapacite": 88.0,
+   "voitureplacesdisponibles": 88.0,
+   "datemajpy": "2026-11-16 14:45:05",
+   "pointgeo": {
+    "lon": 5.4101657867432,
+    "lat": 43.342923476396
+   }
+  },
+  {
+   "nom": "Cours Julien",
+   "commune": "MARSEILLE",
+   "typeparking": "Parking",
+   "tempsreel": "True",
+   "voitureplacescapacite": 250.0,
+   "voitureplacesdisponibles": 209.0,
+   "datemajpy": "2026-11-16 14:45:05",
+   "pointgeo": {
+    "lon": 5.3832685947418,
+    "lat": 43.293540005612
+   }
+  },
+  {
+   "nom": "Gambetta",
+   "commune": "MARSEILLE",
+   "typeparking": "Parking",
+   "tempsreel": "False",
+   "voitureplacescapacite": 573.0,
+   "voitureplacesdisponibles": 47.0,
+   "datemajpy": "2026-11-16 14:45:05",
+   "pointgeo": {
+    "lon": 5.3831022977829,
+    "lat": 43.299009952998
+   }
+  },
+  {
+   "nom": "Hauts de Brunet",
+   "commune": "AIX EN PROVENCE",
+   "typeparking": "P + R",
+   "tempsreel": "False",
+   "voitureplacescapacite": 366.0,
+   "voitureplacesdisponibles": 366.0,
+   "datemajpy": "2026-11-16 14:45:05",
+   "pointgeo": {
+    "lon": 5.43878,
+    "lat": 43.547136
+   }
+  }
+ ]
+}

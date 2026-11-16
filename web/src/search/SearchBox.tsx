@@ -439,6 +439,12 @@ function Option(props: { id: string; row: SearchResult; selected: boolean; onHov
 }
 
 const ICONS: Record<Kind, ReactNode> = {
+  parking: (
+    <>
+      <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" />
+      <path d="M10 16.5V8h3a2.5 2.5 0 0 1 0 5h-3" />
+    </>
+  ),
   lieu: (
     <>
       <path d="M12 21s6.5-5.6 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15.4 12 21 12 21Z" />

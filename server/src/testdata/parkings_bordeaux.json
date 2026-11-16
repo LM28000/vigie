@@ -1,0 +1,57 @@
+{
+ "total_count": 55,
+ "results": [
+  {
+   "ident": "CUBPK44",
+   "nom": "Parc Relais Brandenburg",
+   "etat": "COMPLET",
+   "libres": 0,
+   "total": 211,
+   "np_total": 211,
+   "mdate": "2026-11-16T13:45:17+00:00",
+   "geo_point_2d": {
+    "lon": -0.5444684,
+    "lat": 44.8753791
+   }
+  },
+  {
+   "ident": "CUBPK16",
+   "nom": "Victor Hugo",
+   "etat": "LIBRE",
+   "libres": 193,
+   "total": 634,
+   "np_total": 644,
+   "mdate": "2026-11-16T13:46:44+00:00",
+   "geo_point_2d": {
+    "lon": -0.5721457,
+    "lat": 44.8351304
+   }
+  },
+  {
+   "ident": "CUBPK41",
+   "nom": "Parc Relais Arlac",
+   "etat": "FERME",
+   "libres": 394,
+   "total": 393,
+   "np_total": 398,
+   "mdate": "2026-11-16T13:45:17+00:00",
+   "geo_point_2d": {
+    "lon": -0.6252913,
+    "lat": 44.8268599
+   }
+  },
+  {
+   "ident": "CUBPK98",
+   "nom": "Parc Relais  Hippodrome",
+   "etat": "LIBRE",
+   "libres": 60,
+   "total": 250,
+   "np_total": 250,
+   "mdate": "2026-11-16T13:45:17+00:00",
+   "geo_point_2d": {
+    "lon": -0.6270837,
+    "lat": 44.8742948
+   }
+  }
+ ]
+}

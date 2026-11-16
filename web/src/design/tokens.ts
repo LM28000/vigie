@@ -147,6 +147,16 @@ export const RIVIERE: Ramp = {
   nuit: ['#9e7be8', '#6642b8', '#8e94a3', '#20a392'],
 };
 
+/**
+ * Parkings en direct (bleu ardoise) : taux d'occupation, de « au moins 40 % de places libres » à « complet ». Du plus clair au plus foncé,
+ * identique le jour et la nuit (les jauges ont un disque blanc sous elles et la légende est sur le panneau sombre). Validé avec
+ * validate_palette.js --ordinal en jour (bout clair à 2,06:1 sur fond clair) et en nuit (bout foncé à 2,15:1 sur le panneau #0f121a).
+ * Le complet n'est jamais seulement une couleur : une barre blanche et le mot « Complet » s'y ajoutent.
+ */
+export const PARKING: Ramp = {
+  jour: ['#9fb3d9', '#6c8bc4', '#4467a6', '#2c4a82'],
+  nuit: ['#9fb3d9', '#6c8bc4', '#4467a6', '#2c4a82'],
+};
 /** Élections, participation (bleu) : de la plus faible à la plus forte. */
 export const PARTICIPATION: Ramp = {
   jour: ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0a2548'],

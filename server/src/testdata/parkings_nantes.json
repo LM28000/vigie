@@ -1,0 +1,83 @@
+{
+ "total_count": 6,
+ "results": [
+  {
+   "grp_identifiant": 42,
+   "grp_nom": "CHU 2",
+   "grp_statut": 5,
+   "grp_disponible": 1,
+   "grp_exploitation": 61,
+   "grp_complet": 0,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.5529138839211876,
+    "lat": 47.20889024774273
+   }
+  },
+  {
+   "grp_identifiant": 1,
+   "grp_nom": "FEYDEAU",
+   "grp_statut": 5,
+   "grp_disponible": 208,
+   "grp_exploitation": 490,
+   "grp_complet": 10,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.552558781065703,
+    "lat": 47.21407529472319
+   }
+  },
+  {
+   "grp_identifiant": 2,
+   "grp_nom": "DECRE - BOUFFAY",
+   "grp_statut": 5,
+   "grp_disponible": 184,
+   "grp_exploitation": 394,
+   "grp_complet": 10,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.5540046292504972,
+    "lat": 47.216662613183885
+   }
+  },
+  {
+   "grp_identifiant": 36,
+   "grp_nom": "BACO 2",
+   "grp_statut": 2,
+   "grp_disponible": 10,
+   "grp_exploitation": 118,
+   "grp_complet": 10,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.5516042545448998,
+    "lat": 47.21315097438518
+   }
+  },
+  {
+   "grp_identifiant": 47,
+   "grp_nom": "LES NEFS",
+   "grp_statut": 0,
+   "grp_disponible": 0,
+   "grp_exploitation": 0,
+   "grp_complet": 0,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.5632873817591502,
+    "lat": 47.204092541956626
+   }
+  },
+  {
+   "grp_identifiant": "139",
+   "grp_nom": "P+R Recteur Schmitt",
+   "grp_statut": 1,
+   "grp_disponible": 0,
+   "grp_exploitation": 90,
+   "grp_complet": 0,
+   "grp_horodatage": "2026-11-16T13:45:41+00:00",
+   "location": {
+    "lon": -1.5529031010000267,
+    "lat": 47.251735247
+   }
+  }
+ ]
+}

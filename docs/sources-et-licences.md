@@ -29,6 +29,7 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 | Électricité | RTE éCO2mix, via ODRÉ | licence ouverte |
 | Carburants | prix-carburants.gouv.fr (ministère de l'Économie) | licence ouverte |
 | Vélos en libre-service | chaque réseau, via transport.data.gouv.fr | licence ouverte ou ODbL selon le réseau |
+| Parkings (places libres) | Portails des villes, sans compte : Rennes Métropole et STAR, Nantes Métropole, Eurométropole de Strasbourg, Bordeaux Métropole, Clermont Auvergne Métropole, Tours Métropole, Aix-Marseille-Provence, Orléans Métropole (API Opendatasoft), Grenoble-Alpes Métropole (Mobilités M) | ODbL (Rennes, Nantes, Tours, Grenoble) ou Licence Ouverte / 2.0 (Strasbourg, Bordeaux, Clermont, Aix-Marseille, Orléans) ; la licence de chaque parking est dans sa fiche ; relevé toutes les 5 min par source ; détail dans [couches.md](couches.md#parkings--sources-et-choix) |
 | Feux | NASA FIRMS (capteurs VIIRS) | libre, citer la NASA |
 | Qualité de l'air | Atmo France / AASQA, via Atmo Data (compte requis) | données ouvertes, citer « Atmo France / AASQA » |
 | Avions | adsb.lol (récepteurs ADS-B de la communauté) ; adsb.fi en secours quand adsb.lol demande de ralentir | ODbL ; adsb.fi : usage personnel non commercial |

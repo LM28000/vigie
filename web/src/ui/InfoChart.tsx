@@ -13,9 +13,10 @@ export function InfoChartView({ chart }: { chart: InfoChart }) {
   const t0 = Math.min(...all.map((p) => p[0]));
   const t1 = Math.max(...all.map((p) => p[0]));
   const values = all.map((p) => p[1]);
-  const grain = chart.grain ?? 0.5;
-  const lo = Math.floor(Math.min(...values) / grain) * grain;
-  const hi = Math.max(Math.ceil(Math.max(...values) / grain) * grain, lo + grain);
+  // Un compte (places libres) se gradue en entiers depuis 0 ; une mesure, par pas de `grain` (demi-mètres par défaut, centimètres pour une rivière).
+  const grain = chart.integer ? 1 : chart.grain ?? 0.5;
+  const lo = chart.integer ? 0 : Math.floor(Math.min(...values) / grain) * grain;
+  const hi = Math.max(Math.ceil(Math.max(...values) / grain) * grain, lo + grain * (chart.integer ? 2 : 1));
   const x = (t: number) => PAD.left + ((t - t0) / (t1 - t0 || 1)) * (W - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
   const f = (n: number) => n.toFixed(1);
@@ -33,9 +34,9 @@ export function InfoChartView({ chart }: { chart: InfoChart }) {
   const forecast = chart.forecast && last ? [last, ...chart.forecast] : chart.forecast;
 
   // Repères horizontaux : le bas, le milieu et le haut.
-  const ticks = [lo, (lo + hi) / 2, hi];
-  // Repères horaires toutes les 12 h, alignés sur l'heure de Paris (le décalage est lu sur la première heure).
-  const step = 12 * 3600_000;
+  const ticks = chart.integer ? [lo, Math.round((lo + hi) / 2), hi] : [lo, (lo + hi) / 2, hi];
+  // Repères horaires toutes les 12 h (`hourStep` pour un autre pas), alignés sur l'heure de Paris (le décalage est lu sur la première heure).
+  const step = (chart.hourStep ?? 12) * 3600_000;
   const offset = parisOffsetMs(t0);
   const hours: number[] = [];
   for (let t = Math.ceil((t0 + offset) / step) * step - offset; t <= t1; t += step) hours.push(t);
