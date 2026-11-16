@@ -32,6 +32,7 @@ const SYNONYMS: Record<string, string> = {
   satellites: 'espace iss orbite',
   pluie: 'meteo radar precipitations averse',
   vent: 'rafales meteo',
+  parkings: 'parking parkings stationnement garer places libres parc relais',
   cameras: 'camera cameras webcam webcams videoprotection videosurveillance surveillance cctv',
   elections: 'vote scrutin presidentielle europeennes legislatives resultats bureau de vote participation',
 };

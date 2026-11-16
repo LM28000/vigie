@@ -1,0 +1,49 @@
+{
+ "total_count": 31,
+ "results": [
+  {
+   "nom": "La Jonchère",
+   "type_parking": "Parking Relais Bus",
+   "nb_places": "15",
+   "nb_places_disponibles": null,
+   "horodatage_maj_places_disponibles": null,
+   "places_disponibles_temps_reel": "non",
+   "etat_equipement": "en service",
+   "xlong": "1.9650591334615566",
+   "ylat": "47.83308441566024"
+  },
+  {
+   "nom": "Cathédrale",
+   "type_parking": "Parking",
+   "nb_places": "343",
+   "nb_places_disponibles": "179",
+   "horodatage_maj_places_disponibles": "2026-11-16T14:48:03+01:00",
+   "places_disponibles_temps_reel": "oui",
+   "etat_equipement": "en service",
+   "xlong": "1.910913",
+   "ylat": "47.901405"
+  },
+  {
+   "nom": "Zénith",
+   "type_parking": "Parking Relais Tram",
+   "nb_places": "190",
+   "nb_places_disponibles": "80",
+   "horodatage_maj_places_disponibles": "2026-11-16T14:48:03+01:00",
+   "places_disponibles_temps_reel": "oui",
+   "etat_equipement": "en service",
+   "xlong": "1.9132893153846189",
+   "ylat": "47.86938385027545"
+  },
+  {
+   "nom": "Halles Charpenterie",
+   "type_parking": "Parking",
+   "nb_places": "485",
+   "nb_places_disponibles": "343",
+   "horodatage_maj_places_disponibles": "2026-11-16T14:48:03+01:00",
+   "places_disponibles_temps_reel": "oui",
+   "etat_equipement": "fermé pour travaux",
+   "xlong": "1.909292707758393",
+   "ylat": "47.898559873206025"
+  }
+ ]
+}

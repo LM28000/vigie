@@ -44,7 +44,7 @@ Vigie montre la France en direct : trains, avions, bateaux, météo, territoire,
 ### Données
 
 - **Teintes catégorielles** (une couleur par catégorie) : trains `train-ter`, `train-gv`, `train-ic` ; transports `transit-bus`, `transit-tram`, `transit-metro` ; bateaux `ship-*` ; familles politiques `elec-*`. Toujours accompagnées d'une légende, et du nom dans la fiche.
-- **Rampes séquentielles** (une seule teinte, du clair au foncé le jour) : `avion-alt-*`, `brouillage-*`, `pop-*`, `iso-*`, `couv-*`, `pluie-*`, `accident-*`, `eclair-*`, `participation-*`.
+- **Rampes séquentielles** (une seule teinte, du clair au foncé le jour) : `avion-alt-*`, `brouillage-*`, `pop-*`, `iso-*`, `couv-*`, `pluie-*`, `accident-*`, `eclair-*`, `parking-*`, `participation-*`.
 - **Rampe divergente :** `immo-*`, deux teintes et un gris central (`immo-4`) pour la médiane de référence.
 - **Statuts réservés aux états** (`status-vert`, `status-jaune`, `status-orange`, `status-rouge`) : crues, vigilance, trafic. Jamais pour une catégorie ou une grandeur, toujours avec un mot ou un motif (jaune et orange sont proches).
 - **Toute nouvelle palette** passe le validateur de palettes en jour et en nuit, et ne reprend pas une teinte déjà prise dans la même scène. Teintes déjà prises : bleu (TER, participation, pluie, marine), orange (grande vitesse), vert (Intercités), violet (avions), sarcelle (avions militaires), rouge brique (brouillage GPS), framboise (isochrones), Sienne (population), ocre (accidents), jaune d'or (foudre), olive (couverture), bleu-gris-rose (immobilier).

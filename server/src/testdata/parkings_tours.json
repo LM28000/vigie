@@ -1,0 +1,41 @@
+{
+ "total_count": 7,
+ "results": [
+  {
+   "key": "37001300",
+   "libelle_parking": "Parc Halles Vieux Tours",
+   "capacite": 670,
+   "free_spots": 494,
+   "status": 0,
+   "updated_at": "2026-11-16T13:31:00+00:00",
+   "geo_point": {
+    "lon": 0.681858,
+    "lat": 47.390952
+   }
+  },
+  {
+   "key": "37001100",
+   "libelle_parking": "Parc Heure Tranquille",
+   "capacite": 899,
+   "free_spots": 1,
+   "status": -1,
+   "updated_at": "2026-11-16T13:31:00+00:00",
+   "geo_point": {
+    "lon": 0.699185,
+    "lat": 47.389505
+   }
+  },
+  {
+   "key": "37001400",
+   "libelle_parking": "Parc Champ Girault",
+   "capacite": 401,
+   "free_spots": 0,
+   "status": 0,
+   "updated_at": "2026-11-16T13:31:00+00:00",
+   "geo_point": {
+    "lon": 0.697776,
+    "lat": 47.387558
+   }
+  }
+ ]
+}

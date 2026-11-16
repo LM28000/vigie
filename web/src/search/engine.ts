@@ -7,6 +7,7 @@
 import { clock } from '../core/clock';
 import type { ModuleManager } from '../core/moduleManager';
 import { bikesProvider } from './bikes';
+import { parkingsProvider } from './parkings';
 import { chargersProvider } from './chargers';
 import { commandsProvider } from './commands';
 import { isochronesProvider } from './isochrones';
@@ -26,6 +27,7 @@ const PROVIDERS: readonly Provider[] = [
   shipsProvider,
   transitProvider,
   bikesProvider,
+  parkingsProvider,
   chargersProvider,
   webcamsProvider,
   layersProvider,
@@ -82,5 +84,5 @@ export function arrange(results: readonly SearchResult[], filter: Kind | null): 
  * Un lieu ou une gare est plus souvent ce qu'on cherche qu'une borne parmi 53 000 :
  * à correspondance égale, les types passent dans cet ordre.
  */
-const KIND_BIAS: Record<Kind, number> = { lieu: 30, gare: 30, train: 10, avion: 10, navire: 0, reseau: 0, action: 0, velo: -40, borne: -50, webcam: -20 };
+const KIND_BIAS: Record<Kind, number> = { lieu: 30, gare: 30, train: 10, avion: 10, navire: 0, reseau: 0, action: 0, velo: -40, parking: -30, borne: -50, webcam: -20 };
 const groupScore = (group: Group): number => group.results[0]!.score + KIND_BIAS[group.kind];

@@ -1,0 +1,49 @@
+{
+ "total_count": 35,
+ "results": [
+  {
+   "ident": 10,
+   "nom_parking": "Parking Gare Wodli",
+   "etat": 1,
+   "total": 955,
+   "libre": 390,
+   "position": {
+    "lon": 7.7367710015538,
+    "lat": 48.5873845279566
+   }
+  },
+  {
+   "ident": 1,
+   "nom_parking": "Parking Zénith",
+   "etat": 2,
+   "total": 3175,
+   "libre": 3132,
+   "position": {
+    "lon": 7.68646701218103,
+    "lat": 48.5953352876375
+   }
+  },
+  {
+   "ident": 12,
+   "nom_parking": "Parking Kleber Homme de fer",
+   "etat": 0,
+   "total": 462,
+   "libre": 0,
+   "position": {
+    "lon": 7.74506276428556,
+    "lat": 48.5834973716322
+   }
+  },
+  {
+   "ident": 15,
+   "nom_parking": "Parking Robertsau Boecklin",
+   "etat": 1,
+   "total": 92,
+   "libre": 8,
+   "position": {
+    "lon": 7.77656295435852,
+    "lat": 48.5979711278741
+   }
+  }
+ ]
+}

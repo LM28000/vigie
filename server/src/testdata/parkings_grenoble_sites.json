@@ -1,0 +1,77 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "38006-P-001",
+    "nom": "ALLEVARD PLACE DE VERDUN",
+    "nb_places": 12,
+    "nb_pr": 0,
+    "type_ouvrage": "enclos_en_surface",
+    "commune": "Allevard"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     6.075166,
+     45.394138
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "38151-P-001",
+    "nom": "ECHIROLLES - GARE",
+    "nb_places": 100,
+    "nb_pr": 100,
+    "type_ouvrage": "enclos_en_surface",
+    "commune": "Échirolles"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     5.718526,
+     45.152657
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "38158-P-001",
+    "nom": "EYBENS - LE VERDERET",
+    "nb_places": 43,
+    "nb_pr": 43,
+    "type_ouvrage": "enclos_en_surface",
+    "commune": "Eybens"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     5.754957,
+     45.147116
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "38185-P-001",
+    "nom": "ESTACADE",
+    "nb_places": 581,
+    "nb_pr": 0,
+    "type_ouvrage": "ouvrage",
+    "commune": "Grenoble"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     5.716033,
+     45.18878
+    ]
+   }
+  }
+ ]
+}

@@ -24,6 +24,7 @@ import { jamming } from './jamming';
 import { lightning } from './lightning';
 import { lidar } from './lidar';
 import { monuments } from './monuments';
+import { parkings } from './parkings';
 import { planes } from './planes';
 import { population } from './population';
 import { power } from './power';
@@ -31,6 +32,7 @@ import { railways } from './railways';
 import { rain } from './rain';
 import { satellites } from './satellites';
 import { ships } from './ships';
+import { rivers } from './rivers';
 import { tides } from './tides';
 import { traffic } from './traffic';
 import { trains } from './trains';
@@ -39,8 +41,8 @@ import { weatherAlerts } from './weatherAlerts';
 import { wind } from './wind';
 
 export const MODULES: LayerModule[] = [
-  trains, railways, isochrones, traffic, planes, ships, transit, bikes,
-  floods, tides, weatherAlerts, air, fires, earthquakes,
+  trains, railways, isochrones, traffic, planes, ships, transit, bikes, parkings,
+  floods, rivers, tides, weatherAlerts, air, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections,
   dayNight, buildingShadows, satellites, jamming, rain, lightning, wind,
   aerialPhotos, lidar, cameras, monuments, accidents,

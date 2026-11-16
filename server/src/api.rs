@@ -2,6 +2,7 @@
 //!
 //! - `GET /api/health` : état du serveur (horaires chargés, fraîcheur du temps réel).
 //! - `GET /api/velos` : stations de vélos en libre-service de France, avec vélos et places disponibles.
+//! - `GET /api/parkings` : places libres des parkings et parcs relais des villes qui les publient ; `GET /api/parkings/courbe?id=…` : leur courbe des dernières 24 heures.
 //! - `GET /api/feux` : feux détectés par satellite sur 7 jours.
 //! - `GET /api/bateaux` : navires autour de la France (AIS, aisstream.io), toutes les 10 s.
 //! - `GET /api/avions` : avions en vol au-dessus de la France (adsb.lol), mis à jour toutes les 10 s ; chaque avion dit s'il est militaire (`military`).
@@ -17,6 +18,7 @@
 //! - `GET /api/trafic` : événements routiers (Bison Futé) ; `GET /api/trafic/etat` : état de la circulation.
 //! - `GET /api/vigilance` : vigilance météo par département (Météo-France).
 //! - `GET /api/marees` : niveau de la mer aux marégraphes (Shom, REFMAR), 48 h de mesures et estimation des marées.
+//! - `GET /api/rivieres` : hauteur, débit et tendance sur 3 h des stations hydrométriques (Hub'Eau) ; `GET /api/rivieres/{code}` : courbe de 48 h d'une station.
 //! - `GET /api/air` : indice ATMO de qualité de l'air par commune, et épisodes de pollution (Atmo France / AASQA).
 //! - `GET /api/trains?from=…&to=…` : les trains qui roulent entre deux instants
 //!   (secondes UTC), avec leurs arrêts et leurs horaires prévus et réels. Le
@@ -72,6 +74,8 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/arrets", get(extras_version))
         .route("/api/arrets/{version}", get(extras_stops))
         .route("/api/velos", get(|State(state): State<AppState>| async move { prepared(state.bikes(), "vélos") }))
+        .route("/api/parkings", get(|| async { crate::parkings::response() }))
+        .route("/api/parkings/courbe", get(crate::parkings::curve))
         .route("/api/feux", get(|State(state): State<AppState>| async move { prepared(state.fires(), "feux") }))
         .route("/api/avions", get(|State(state): State<AppState>| async move { prepared(state.planes(), "avions") }))
         .route("/api/brouillage", get(|State(state): State<AppState>| async move { prepared(state.jamming(), "brouillage GPS") }))
@@ -92,6 +96,8 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/vigilance", get(|State(state): State<AppState>| async move { prepared(state.vigilance(), "vigilance") }))
         .route("/api/marees", get(|State(state): State<AppState>| async move { prepared(state.tides(), "marées") }))
         .route("/api/air", get(air))
+        .route("/api/rivieres", get(|| async { crate::rivers::response() }))
+        .route("/api/rivieres/{code}", get(crate::rivers::series_handler))
         .route("/api/satellites/starlink", get(|State(state): State<AppState>| async move { prepared(state.starlink(), "Starlink") }))
         .route("/api/vent", get(|State(state): State<AppState>| async move { prepared(state.wind(), "vent") }))
         // Une adresse d'API inconnue est une erreur, pas la page du site.
