@@ -40,6 +40,7 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 | Satellites | CelesTrak (éléments orbitaux GP) | libre ; au plus un téléchargement par groupe toutes les 2 h |
 | Vent | Open-Meteo (modèle ARPEGE Europe de Météo-France), API gratuite sans clé | CC BY 4.0, usage non commercial ; la grille de 0,5° et une collecte toutes les 6 h respectent les quotas |
 | Radar de pluie | RainViewer, `api.rainviewer.com` | Mention de la source obligatoire ; recolorisation des images permise par les conditions d'utilisation ; 500 requêtes par minute et par adresse IP (vérifié en novembre 2026) |
+| Foudre en direct | EUMETSAT, service d'images EUMETView (`view.eumetsat.int`, WMS, couche `li_afa` de l'imageur d'éclairs MTG), sans clé | Service annoncé sans frais ni restriction d'accès ; mention « © EUMETSAT » ; recolorisation côté navigateur ; 20 requêtes par seconde et 8 en parallèle au plus. Les conditions détaillées sont dans la politique de données de l'EUMETSAT (à relire avant un usage commercial). Blitzortung.org n'est pas utilisé (réutilisation du flux soumise à accord) |
 | Géocodage des adresses | IGN, Géoplateforme (`data.geopf.fr/geocodage`), sans clé | Licence Etalab 2.0 |
 | Vigilance météo | Météo-France via data.gouv.fr, contours IGN Admin Express | Licence Ouverte 2.0 |
 | Trafic routier | Bison Futé via transport.data.gouv.fr ; Rennes Métropole | Licence Ouverte 2.0 ; ODbL |

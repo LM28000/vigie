@@ -21,6 +21,7 @@ import { fuel } from './fuel';
 import { immobilier } from './immobilier';
 import { isochrones } from './isochrones';
 import { jamming } from './jamming';
+import { lightning } from './lightning';
 import { lidar } from './lidar';
 import { monuments } from './monuments';
 import { planes } from './planes';
@@ -41,6 +42,6 @@ export const MODULES: LayerModule[] = [
   trains, railways, isochrones, traffic, planes, ships, transit, bikes,
   floods, tides, weatherAlerts, air, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections,
-  dayNight, buildingShadows, satellites, jamming, rain, wind,
+  dayNight, buildingShadows, satellites, jamming, rain, lightning, wind,
   aerialPhotos, lidar, cameras, monuments, accidents,
 ];

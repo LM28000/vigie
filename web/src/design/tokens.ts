@@ -126,6 +126,15 @@ export const ACCIDENT: Ramp = {
   jour: ['#d6aa62', '#b98340', '#9c6224', '#80481a'],
   nuit: ['#d6aa62', '#b98340', '#9c6224', '#80481a'],
 };
+/**
+ * Foudre en direct (jaune d'or) : 1, 2 à 3, 4 à 9, 10 éclairs et plus par case de 2 km et par 5 minutes.
+ * Le jour du plus clair au plus foncé ; la nuit du plus sombre au plus lumineux (plus d'éclairs = plus de lumière).
+ * Validé avec validate_palette.js --ordinal en jour (bout faible à 2,15:1 sur fond clair) et en nuit (bout faible à 2,87:1).
+ */
+export const ECLAIR: Ramp = {
+  jour: ['#d3aa00', '#a98400', '#7f6200', '#574300'],
+  nuit: ['#7a5f00', '#a98400', '#d4aa00', '#ffe14d'],
+};
 /** Élections, participation (bleu) : de la plus faible à la plus forte. */
 export const PARTICIPATION: Ramp = {
   jour: ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0a2548'],

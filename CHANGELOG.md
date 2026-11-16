@@ -2,6 +2,11 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 16 novembre 2026 — Foudre en direct
+
+- **Foudre en direct** (Ciel et espace) : les éclairs des 45 dernières minutes vus du satellite MTG (imageur d'éclairs LI), lus directement par le navigateur sur le service ouvert EUMETView (EUMETSAT, sans compte ni clé), recolorés dans une rampe jaune d'or validée (`ECLAIR`, jour et nuit) et d'autant plus transparents qu'ils sont anciens ; fondu à l'arrivée d'une image (coupé avec `prefers-reduced-motion`) ; relecture du passé possible (archive depuis mai 2025). Blitzortung.org écarté (conditions de réutilisation).
+- **Radioactivité ambiante (Téléray)** : non intégrée, aucune source ouverte et réutilisable (API de teleray.asnr.fr non documentée et sans licence, EURDEP soumis à accord) : voir [docs/couches.md](docs/couches.md#radioactivité-ambiante-téléray--pas-intégrée).
+
 ## 15 novembre 2026 — Avions militaires, brouillage GPS, modes de vision, caméras
 
 - **Avions militaires et d'État** : le drapeau `dbFlags` (bit 0) des réponses d'adsb.lol et d'adsb.fi est exposé (`military`), sans requête de plus. Silhouette et anneau sarcelle, mention dans la fiche, légende, réglage « Afficher : tous / militaires seulement ».
