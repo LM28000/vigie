@@ -135,6 +135,18 @@ export const ECLAIR: Ramp = {
   jour: ['#d3aa00', '#a98400', '#7f6200', '#574300'],
   nuit: ['#7a5f00', '#a98400', '#d4aa00', '#ffe14d'],
 };
+/**
+ * Rivières en direct, tendance de la hauteur sur 3 h (divergente) : monte vite, monte, stable (gris neutre), baisse. Le violet dit la
+ * montée (ordre monotone en clarté : le jour le plus fort est le plus foncé, la nuit le plus clair), le sarcelle la baisse. Validées avec
+ * validate_palette.js : les trois teintes ensemble en jour (CVD ΔE 14,9 au plus serré) et en nuit (12,6), le gris vérifié à part
+ * (contraste ≥ 3:1 sur les deux fonds ; un gris n'a pas de chroma, il échoue au plancher de chroma par construction). Le gris
+ * n'est jamais seul : le symbole change aussi (flèche vers le haut, trait, flèche vers le bas).
+ */
+export const RIVIERE: Ramp = {
+  jour: ['#6a35b8', '#a77be0', '#8a8f9c', '#00897a'],
+  nuit: ['#9e7be8', '#6642b8', '#8e94a3', '#20a392'],
+};
+
 /** Élections, participation (bleu) : de la plus faible à la plus forte. */
 export const PARTICIPATION: Ramp = {
   jour: ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0a2548'],

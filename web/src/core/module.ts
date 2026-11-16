@@ -187,6 +187,8 @@ export interface InfoChart {
   forecast?: ReadonlyArray<readonly [number, number]>;
   /** Instant simulé, repéré par un trait vertical. */
   now?: number;
+  /** Pas des repères de l'axe vertical, dans l'unité de la courbe (0,5 par défaut : adapté à des mètres de marée, trop gros pour des centimètres de rivière). */
+  grain?: number;
   /** Repères (pleines et basses mers) : un point et sa valeur. */
   marks?: ReadonlyArray<{ t: number; value: number; high: boolean; estimated?: boolean }>;
   /** Texte alternatif de la courbe, pour les lecteurs d'écran. */
