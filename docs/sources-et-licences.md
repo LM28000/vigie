@@ -25,6 +25,7 @@ Les clés personnelles (aisstream.io, Atmo Data, PRIM d'Île-de-France Mobilité
 | Séismes | EMSC | attribution |
 | Vigilance crues | Vigicrues (SCHAPI) | licence ouverte |
 | Marégraphes (niveau de la mer) | [REFMAR](https://refmar.shom.fr), Shom et partenaires : `services.data.shom.fr/maregraphie/observation/json/<station>` (sans clé) | Licence Ouverte 2.0 (jeux « RONIM » et « partenaires » sur data.gouv.fr), mention « Shom, REFMAR » ; mesures brutes non validées |
+| Rivières en direct (hauteur et débit des stations) | [Hub'Eau, API Hydrométrie](https://hubeau.eaufrance.fr/page/api-hydrometrie) (OFB et BRGM ; données de la banque Hydro, Service central Vigicrues) : `hubeau.eaufrance.fr/api/v2/hydrometrie/referentiel/stations` et `/observations_tr`, sans clé ; bulletin Vigicrues pour le rattachement des stations aux tronçons en vigilance | Licence Ouverte (Etalab) d'après les conditions générales de Hub'Eau, citation de la source obligatoire (« Hub'Eau Hydrométrie, Service central Vigicrues ») ; mesures brutes non validées ; la plateforme peut bloquer une adresse trop gourmande |
 | Électricité | RTE éCO2mix, via ODRÉ | licence ouverte |
 | Carburants | prix-carburants.gouv.fr (ministère de l'Économie) | licence ouverte |
 | Vélos en libre-service | chaque réseau, via transport.data.gouv.fr | licence ouverte ou ODbL selon le réseau |

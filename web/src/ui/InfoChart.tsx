@@ -13,8 +13,9 @@ export function InfoChartView({ chart }: { chart: InfoChart }) {
   const t0 = Math.min(...all.map((p) => p[0]));
   const t1 = Math.max(...all.map((p) => p[0]));
   const values = all.map((p) => p[1]);
-  const lo = Math.floor(Math.min(...values) * 2) / 2;
-  const hi = Math.max(Math.ceil(Math.max(...values) * 2) / 2, lo + 0.5);
+  const grain = chart.grain ?? 0.5;
+  const lo = Math.floor(Math.min(...values) / grain) * grain;
+  const hi = Math.max(Math.ceil(Math.max(...values) / grain) * grain, lo + grain);
   const x = (t: number) => PAD.left + ((t - t0) / (t1 - t0 || 1)) * (W - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
   const f = (n: number) => n.toFixed(1);
@@ -47,7 +48,7 @@ export function InfoChartView({ chart }: { chart: InfoChart }) {
           <g key={v}>
             <line className="chart__grid" x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} />
             <text className="chart__axis" x={PAD.left - 4} y={y(v) + 3} textAnchor="end">
-              {v.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
+              {v.toLocaleString('fr-FR', { maximumFractionDigits: Number.isInteger(Math.round(grain * 100) / 10) ? 1 : 2 })}
             </text>
           </g>
         ))}

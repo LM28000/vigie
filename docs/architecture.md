@@ -59,7 +59,7 @@ flowchart LR
 | `planes.rs`, `ships.rs`, `satellites.rs` | Avions (adsb.lol, drapeau militaire compris), navires (aisstream, WebSocket), éléments orbitaux (CelesTrak). |
 | `jamming.rs` | Brouillage GPS estimé : grille de 0,5° sur 20 min, alimentée par les réponses des avions. |
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
-| `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, feux. |
+| `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `rivers.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, rivières (Hub'Eau), feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
 | `tiles/` | Moteur de tuiles vectorielles : voir [moteur-de-tuiles.md](moteur-de-tuiles.md). |
@@ -67,7 +67,7 @@ flowchart LR
 | `history/` | Enregistrement et relecture : voir [historique-et-relecture.md](historique-et-relecture.md). |
 | `state.rs`, `api.rs`, `main.rs` | État partagé, routes HTTP, démarrage et réglages (voir [deploiement.md](deploiement.md)). |
 
-Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
+Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/rivieres`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
 
 ## Le site (`web/src/`)
 
@@ -96,7 +96,7 @@ flowchart TB
 |---|---|
 | `core/` | Le moteur, sans dépendance à React : horloge, contrat de module, gestionnaire, scènes, état partagé dans l'adresse, relecture, visite guidée, analyse de zone. |
 | `map/` | Fond de carte OpenFreeMap « Liberty » repeint (`calmStyle.ts`), globe, relief, branchement de deck.gl (`MapView.tsx`), tuiles vectorielles du serveur (`vectorTiles.ts`), désencombrement des étiquettes. |
-| `modules/` | Une couche par fichier (31 modules, déclarés dans `modules/index.ts`), plus des aides communes (`symbols.ts`, atlas d'icônes, couleurs de statut). |
+| `modules/` | Une couche par fichier (32 modules, déclarés dans `modules/index.ts`), plus des aides communes (`symbols.ts`, atlas d'icônes, couleurs de statut). |
 | `models/` | Maquettes 3D construites dans le code et éclairage par le soleil : voir [rendu-3d.md](rendu-3d.md). |
 | `search/` | La recherche universelle : un fournisseur de résultats par source. |
 | `ui/` | Pastilles, catalogue de couches, frise du temps, fiche d'objet, accueil, feuille du téléphone, visite, outil de zone. |

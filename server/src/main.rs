@@ -49,6 +49,7 @@ mod jamming;
 mod planes;
 mod raptor;
 mod rails;
+mod rivers;
 mod realtime;
 mod relief_lidar;
 mod ships;
@@ -139,6 +140,7 @@ async fn main() -> Result<()> {
     tokio::spawn(vigilance::poll_forever(http.clone(), state.clone()));
     tokio::spawn(air::poll_forever(http.clone(), state.clone()));
     tokio::spawn(tides::poll_forever(http.clone(), state.clone()));
+    tokio::spawn(rivers::poll_forever(http.clone()));
     tokio::spawn(estimates::poll_forever(http.clone(), config.data_dir.clone(), state.clone()));
     state.tiles().spawn(http.clone(), config.data_dir.clone());
     tokio::spawn(multimodal::load::load_forever(http.clone(), config.data_dir.clone(), state.clone()));
