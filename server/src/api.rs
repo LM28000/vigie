@@ -13,7 +13,7 @@
 //! - `GET /api/accidents` : accidents corporels de la circulation (ONISR, cinq dernières années), en colonnes, JSON compressé en gzip.
 //! - `GET /api/monuments` : monuments historiques (base Mérimée, ministère de la Culture), JSON déjà compressé en gzip.
 //! - `GET /api/cameras` : caméras de vidéoprotection d'OpenStreetMap (extraction hebdomadaire), JSON déjà compressé en gzip.
-//! - `GET /api/webcams/windy` (catalogue), `/api/webcams/windy/image/{id}` (redirige vers l'image) et `/api/webcams/criter` : webcams publiques.
+//! - `GET /api/webcams/windy` (catalogue), `/api/webcams/windy/image/{id}` (redirige vers l'image) `/api/webcams/criter` et `/api/webcams/ouvertes` : webcams publiques.
 //! - `GET /api/trafic` : événements routiers (Bison Futé) ; `GET /api/trafic/etat` : état de la circulation.
 //! - `GET /api/vigilance` : vigilance météo par département (Météo-France).
 //! - `GET /api/marees` : niveau de la mer aux marégraphes (Shom, REFMAR), 48 h de mesures et estimation des marées.
@@ -85,6 +85,7 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/webcams/windy", get(|| async { crate::webcams::windy_response() }))
         .route("/api/webcams/windy/image/{id}", get(crate::webcams::windy_image))
         .route("/api/webcams/criter", get(|| async { crate::webcams::criter_response() }))
+        .route("/api/webcams/ouvertes", get(|| async { crate::webcams::open_response() }))
         .route("/api/analyse", post(crate::analyse::handler))
         .route("/api/trafic", get(|State(state): State<AppState>| async move { prepared(state.traffic(), "trafic") }))
         .route("/api/trafic/etat", get(|State(state): State<AppState>| async move { prepared(state.traffic_state(), "état du trafic") }))

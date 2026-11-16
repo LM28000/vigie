@@ -1,0 +1,62 @@
+[
+ {
+  "geo_point_2d": {
+   "lon": -1.5375488408,
+   "lat": 43.5057549008
+  },
+  "geo_shape": {
+   "type": "Feature",
+   "geometry": {
+    "coordinates": [
+     -1.5375488408,
+     43.5057549008
+    ],
+    "type": "Point"
+   },
+   "properties": {}
+  },
+  "ogc_fid": "4",
+  "nom": "Webcam - Panoramique Sables d’Or – Marinella – Corsaires",
+  "lien": "https://pv.viewsurf.com/2130/Anglet-Panoramique-Sables-d-Or-Marinella-Corsaires?i=NzY3Njo"
+ },
+ {
+  "geo_point_2d": {
+   "lon": -1.5432316734,
+   "lat": 43.4995760996
+  },
+  "geo_shape": {
+   "type": "Feature",
+   "geometry": {
+    "coordinates": [
+     -1.5432316734,
+     43.4995760996
+    ],
+    "type": "Point"
+   },
+   "properties": {}
+  },
+  "ogc_fid": "2",
+  "nom": "Webcam - Plage du Club",
+  "lien": "https://pv.viewsurf.com/2126/Anglet-Plage-du-Club?i=NzY3Mjo"
+ },
+ {
+  "geo_point_2d": {
+   "lon": -1.5262020788,
+   "lat": 43.5208615464
+  },
+  "geo_shape": {
+   "type": "Feature",
+   "geometry": {
+    "coordinates": [
+     -1.5262020788,
+     43.5208615464
+    ],
+    "type": "Point"
+   },
+   "properties": {}
+  },
+  "ogc_fid": "6",
+  "nom": "Webcam - Plage des Cavaliers",
+  "lien": "https://pv.viewsurf.com/1994/Anglet-Plage-des-Cavaliers?i=NzMxMDo"
+ }
+]

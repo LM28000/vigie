@@ -23,7 +23,7 @@ export function TourLauncher({ manager }: { manager: ModuleManager }) {
       <Icon name="visite" size={20} />
       <span className="tour-launch__text">
         <b>Visite guidée</b>
-        <span>12 étapes, 3 minutes, la carte en mouvement</span>
+        <span>13 étapes, 3 minutes, la carte en mouvement</span>
       </span>
     </button>
   );

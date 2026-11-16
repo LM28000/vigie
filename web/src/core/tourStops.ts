@@ -8,6 +8,7 @@
 import { clock } from './clock';
 import type { StopContext, TourHelpers } from './tour';
 import { setCurtainFraction } from '../modules/aerialPhotos';
+import type { CamerasData } from '../modules/cameras';
 import type { PlanesData } from '../modules/planes';
 import type { ShipsData } from '../modules/ships';
 import type { IsochroneData } from '../modules/isochrones';
@@ -66,6 +67,9 @@ function km(a: { lon: number; lat: number }, b: { lon: number; lat: number }): n
   const dy = (a.lat - b.lat) * 110.57;
   return Math.hypot(dx, dy);
 }
+
+/** Le Palais-Royal, à Paris : une vingtaine de caméras de vidéoprotection y ont une direction connue dans OpenStreetMap. */
+const PALAIS_ROYAL = { lon: 2.3429, lat: 48.8629 };
 
 const ROISSY = { lon: 2.5479, lat: 49.0097 };
 /** Gare de Paris-Lyon, code UIC. */
@@ -269,6 +273,24 @@ export const STOPS: readonly TourStop[] = [
     ready: (h) => h.status('elections') === 'ready',
     settleMs: 800,
     dwellMs: 8_500,
+  },
+  {
+    id: 'cameras',
+    kicker: 'Territoire',
+    title: 'Les caméras de Paris',
+    caption:
+      'Chaque point est une caméra de vidéoprotection recensée par les contributeurs d’OpenStreetMap. Quand on connaît sa direction, un cône montre grossièrement ce qu’elle regarde : une indication, pas la zone réellement filmée.',
+    camera: { center: [PALAIS_ROYAL.lon, PALAIS_ROYAL.lat], zoom: 17, pitch: 62, bearing: 20, duration: 4_000 },
+    layers: ['cameras'],
+    settings: { cameras: { osm: 'cones', webcams: 'off' } },
+    stat: 'cameras',
+    ready: (h) => {
+      const osm = h.data<CamerasData>('cameras')?.osm;
+      // Des caméras avec une direction autour de la vue : sans elles, pas de cônes à montrer.
+      return h.status('cameras') === 'ready' && !!osm && osm.list.filter((c) => c.dir !== null && km(c, PALAIS_ROYAL) < 0.2).length >= 5;
+    },
+    settleMs: 800,
+    dwellMs: 9_000,
   },
   {
     id: 'photos',

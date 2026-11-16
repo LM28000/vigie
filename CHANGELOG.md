@@ -2,10 +2,14 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
-## 16 novembre 2026 — Foudre en direct
+## 16 novembre 2026 — Foudre en direct, webcams ouvertes, recherche de webcams et de modes de vision
 
 - **Foudre en direct** (Ciel et espace) : les éclairs des 45 dernières minutes vus du satellite MTG (imageur d'éclairs LI), lus directement par le navigateur sur le service ouvert EUMETView (EUMETSAT, sans compte ni clé), recolorés dans une rampe jaune d'or validée (`ECLAIR`, jour et nuit) et d'autant plus transparents qu'ils sont anciens ; fondu à l'arrivée d'une image (coupé avec `prefers-reduced-motion`) ; relecture du passé possible (archive depuis mai 2025). Blitzortung.org écarté (conditions de réutilisation).
 - **Radioactivité ambiante (Téléray)** : non intégrée, aucune source ouverte et réutilisable (API de teleray.asnr.fr non documentée et sans licence, EURDEP soumis à accord) : voir [docs/couches.md](docs/couches.md#radioactivité-ambiante-téléray--pas-intégrée).
+- **Webcams ouvertes** : 13 webcams d'Orléans Métropole et du littoral d'Anglet (data.gouv.fr, Licence Ouverte 2.0), position et page de la webcam sans image, `GET /api/webcams/ouvertes`, listes relues toutes les 6 h ; fiche avec source et licence. Les autres jeux examinés (Saint-Nazaire, déchèteries d'Orléans, caméras de comptage…) sont écartés et motivés dans [docs/couches.md](docs/couches.md#caméras--sources-et-choix).
+- **Fiche webcam** vérifiée sur la prod, ordinateur et téléphone : image décodée avant d'être montrée, mention « Windy Webcams » devenue un lien vers la page de la webcam, fiche ouverte à mi-hauteur sur téléphone quand elle porte une image.
+- **Recherche** : webcams par nom ou lieu (« webcam Chamonix »), modes de vision (« vision thermique », « écran cathodique »…).
+- **Visite guidée** : treizième étape « Les caméras de Paris » (cônes de vision, zoom 17 incliné), sautée sans données.
 
 ## 15 novembre 2026 — Avions militaires, brouillage GPS, modes de vision, caméras
 

@@ -82,9 +82,14 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand }: Mob
 
   // Un nouvel objet touché ouvre sa fiche ; sans objet, il ne reste que le catalogue.
   const selectionKey = selection ? `${selection.moduleId}:${JSON.stringify(selection.value)}` : '';
+  // Une webcam se regarde : sa fiche s'ouvre à mi-hauteur, l'image visible, au lieu de la seule poignée.
+  const hasImage = !!info?.content.image;
+  const openedFor = useRef('');
   useEffect(() => {
     setTab(selectionKey ? 'fiche' : 'couches');
-  }, [selectionKey]);
+    if (selectionKey && hasImage && openedFor.current !== selectionKey) onSnap('half');
+    openedFor.current = selectionKey && hasImage ? selectionKey : '';
+  }, [selectionKey, hasImage]);
 
   const nearest = (value: number): Snap =>
     SNAPS.reduce((best, s) => (Math.abs(heights[s] - value) < Math.abs(heights[best] - value) ? s : best), 'peek' as Snap);

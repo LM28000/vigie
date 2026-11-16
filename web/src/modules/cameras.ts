@@ -7,8 +7,9 @@
  *    connue (secteur de 60°, 120° pour une caméra panoramique, portée de 35 m, ou déduite de la hauteur et de
  *    l'inclinaison `camera:angle`), un cercle pour un dôme sans direction ; à partir du zoom 16, le volume du
  *    cône, de la caméra au sol.
- * 2. **Webcams publiques avec image** : Windy Webcams (clé `WINDY_WEBCAMS_KEY` côté serveur seulement) et les
- *    caméras de trafic Criter de la Métropole de Lyon (données ouvertes). La fiche montre l'image, rechargée
+ * 2. **Webcams publiques** : Windy Webcams (clé `WINDY_WEBCAMS_KEY` côté serveur seulement) et les
+ *    caméras de trafic Criter de la Métropole de Lyon (données ouvertes), avec, en plus, quelques webcams d'Orléans et d'Anglet
+ *    dont les jeux ouverts ne donnent que la page (fiche sans image, lien vers la page). La fiche montre l'image, rechargée
  *    toute seule tant qu'elle est ouverte, jamais agrandie, avec un lien vers la page de la webcam.
  *
  * Les couleurs : des symboles noir et blanc, comme les monuments (aucune teinte de plus sur une carte déjà
@@ -58,6 +59,19 @@ export interface WebcamWindy {
   detail: string;
 }
 
+/** Webcam d'un jeu ouvert (Orléans Métropole, Anglet) : une position et la page de la webcam, pas d'image. */
+export interface WebcamOpen {
+  id: number;
+  lon: number;
+  lat: number;
+  name: string;
+  town: string;
+  /** Page de la webcam, chez son éditeur. */
+  page: string;
+  /** Qui publie le jeu de données : « Orléans Métropole », « Commune d'Anglet ». */
+  source: string;
+}
+
 export interface CameraCriter {
   id: number;
   lon: number;
@@ -70,19 +84,24 @@ export interface CameraCriter {
   time: number;
 }
 
-type Family = 'osm' | 'windy' | 'criter';
+type Family = 'osm' | 'windy' | 'criter' | 'open';
 
 export interface CamerasData {
   osm?: { list: OsmCamera[]; byId: Map<number, OsmCamera>; updatedAt: number };
   windy?: { active: boolean; reason: string; list: WebcamWindy[]; byId: Map<number, WebcamWindy> };
   criter?: { list: CameraCriter[]; byId: Map<number, CameraCriter>; updatedAt: number };
+  open?: { list: WebcamOpen[]; byId: Map<number, WebcamOpen> };
   /** Dernier échec de chaque source (instant en ms) : on ne réessaie pas en boucle. */
   failedAt: Partial<Record<Family, number>>;
 }
 
 const DAY = 24 * 3600_000;
 /** Mémoire des sources lentes entre deux chargements (la couche se recharge chaque minute pour Criter). */
-const cache: { osm?: { at: number; value: NonNullable<CamerasData['osm']> }; windy?: { at: number; value: NonNullable<CamerasData['windy']> } } = {};
+const cache: {
+  osm?: { at: number; value: NonNullable<CamerasData['osm']> };
+  windy?: { at: number; value: NonNullable<CamerasData['windy']> };
+  open?: { at: number; value: NonNullable<CamerasData['open']> };
+} = {};
 
 async function getJson<T>(url: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -112,10 +131,16 @@ async function loadCriter(signal: AbortSignal): Promise<NonNullable<CamerasData[
   return { list, byId: new Map(list.map((c) => [c.id, c])), updatedAt: json.updatedAt * 1000 };
 }
 
+async function loadOpen(signal: AbortSignal): Promise<NonNullable<CamerasData['open']>> {
+  const json = await getJson<{ webcams: Array<[number, number, number, string, string, string, string]> }>('/api/webcams/ouvertes', signal);
+  const list: WebcamOpen[] = json.webcams.map(([id, lon, lat, name, town, page, source]) => ({ id, lon, lat, name, town, page, source }));
+  return { list, byId: new Map(list.map((w) => [w.id, w])) };
+}
+
 /** Familles que les réglages demandent d'afficher. */
 function wanted(settings: Readonly<Record<string, string>>): Record<Family, boolean> {
   const webcams = settings.webcams ?? 'all';
-  return { osm: (settings.osm ?? 'cones') !== 'off', windy: webcams === 'all', criter: webcams !== 'off' };
+  return { osm: (settings.osm ?? 'cones') !== 'off', windy: webcams === 'all', criter: webcams !== 'off', open: webcams !== 'off' };
 }
 
 // --- Libellés ---
@@ -312,9 +337,9 @@ export const cameras = defineModule<CamerasData>({
   name: 'Caméras',
   category: 'territoire',
   description:
-    'Les caméras de vidéoprotection d’OpenStreetMap, avec leur cône de vision quand leur direction est connue, et des webcams publiques avec leur image (Windy, Criter à Lyon).',
+    'Les caméras de vidéoprotection d’OpenStreetMap, avec leur cône de vision quand leur direction est connue, et des webcams publiques avec leur image (Windy, Criter à Lyon) ou leur page (Orléans, Anglet).',
   attribution:
-    'Vidéoprotection : © contributeurs OpenStreetMap (ODbL) · Webcams : Windy Webcams (windy.com) · Criter : Métropole de Lyon, data.gouv.fr (Licence Ouverte 2.0)',
+    'Vidéoprotection : © contributeurs OpenStreetMap (ODbL) · Webcams : Windy Webcams (windy.com) · Criter : Métropole de Lyon, Orléans Métropole, commune d’Anglet, data.gouv.fr (Licence Ouverte 2.0)',
   // Criter renouvelle ses images chaque minute ; les sources lentes sont gardées en mémoire (voir `load`).
   refreshIntervalMs: 60_000,
   // Pas d'historique : le dessin ne dépend pas de l'instant affiché.
@@ -338,8 +363,8 @@ export const cameras = defineModule<CamerasData>({
       id: 'webcams',
       label: 'Webcams avec image',
       options: [
-        { value: 'all', label: 'Windy et Criter' },
-        { value: 'criter', label: 'Criter (Lyon) seulement' },
+        { value: 'all', label: 'Windy et webcams ouvertes' },
+        { value: 'criter', label: 'Webcams ouvertes seulement (sans Windy)' },
         { value: 'off', label: 'Masquées' },
       ],
       defaultValue: 'all',
@@ -366,13 +391,14 @@ export const cameras = defineModule<CamerasData>({
       });
     }
     if (show.criter) items.push({ color: KEY_CSS, label: 'Carré sombre : caméra de trafic Criter (Métropole de Lyon, image chaque minute)', icon: sheet.dataUrl('trafic') });
+    if (show.open) items.push({ color: KEY_CSS, label: 'Rond sombre : webcam ouverte sans image (Orléans, Anglet), lien vers sa page', icon: sheet.dataUrl('webcam') });
     return items;
   },
 
   async load({ signal, settings }) {
     const show = wanted(settings);
     const now = Date.now();
-    const data: CamerasData = { failedAt: {}, osm: cache.osm?.value, windy: cache.windy?.value };
+    const data: CamerasData = { failedAt: {}, osm: cache.osm?.value, windy: cache.windy?.value, open: cache.open?.value };
     const tasks: Array<Promise<void>> = [];
     const run = (family: Family, job: () => Promise<void>) =>
       tasks.push(
@@ -398,6 +424,14 @@ export const cameras = defineModule<CamerasData>({
         data.windy = value;
       });
     }
+    // Webcams ouvertes : listes statiques, relues par le serveur quatre fois par jour, ici au plus toutes les 3 h.
+    if (show.open && (!cache.open || now - cache.open.at > 3 * 3600_000)) {
+      run('open', async () => {
+        const value = await loadOpen(signal);
+        cache.open = { at: now, value };
+        data.open = value;
+      });
+    }
     // Criter : la liste (heure des images) est relue à chaque chargement, une fois par minute.
     if (show.criter) {
       run('criter', async () => {
@@ -406,8 +440,8 @@ export const cameras = defineModule<CamerasData>({
     }
     await Promise.all(tasks);
     const failed = Object.keys(data.failedAt).length;
-    const requested = Number(show.osm && !data.osm) + Number(show.windy && !data.windy) + Number(show.criter && !data.criter);
-    if (failed > 0 && requested > 0 && !data.osm && !data.windy && !data.criter) throw new Error('le serveur ne donne aucune caméra pour le moment');
+    const requested = Number(show.osm && !data.osm) + Number(show.windy && !data.windy) + Number(show.criter && !data.criter) + Number(show.open && !data.open);
+    if (failed > 0 && requested > 0 && !data.osm && !data.windy && !data.criter && !data.open) throw new Error('le serveur ne donne aucune caméra pour le moment');
     return data;
   },
 
@@ -415,7 +449,7 @@ export const cameras = defineModule<CamerasData>({
   needsReload(data, _time, settings) {
     const show = wanted(settings);
     const now = Date.now();
-    return (['osm', 'windy', 'criter'] as const).some((family) => show[family] && !data[family] && now - (data.failedAt[family] ?? 0) > 30_000);
+    return (['osm', 'windy', 'criter', 'open'] as const).some((family) => show[family] && !data[family] && now - (data.failedAt[family] ?? 0) > 30_000);
   },
 
   summary({ data, settings, view }) {
@@ -425,7 +459,7 @@ export const cameras = defineModule<CamerasData>({
     if (show.osm && data.osm) {
       parts.push(`${data.osm.list.length.toLocaleString('fr-FR')} caméras OpenStreetMap${view.zoom < POINT_ZOOM ? ' (zoom 11 et plus)' : ''}`);
     } else if (show.osm) parts.push('vidéoprotection indisponible');
-    const webcams = (show.windy && data.windy?.active ? data.windy.list.length : 0) + (show.criter ? (data.criter?.list.length ?? 0) : 0);
+    const webcams = (show.windy && data.windy?.active ? data.windy.list.length : 0) + (show.criter ? (data.criter?.list.length ?? 0) : 0) + (show.open ? (data.open?.list.length ?? 0) : 0);
     if (webcams > 0) parts.push(`${webcams.toLocaleString('fr-FR')} webcams`);
     if (show.windy && data.windy && !data.windy.active) parts.push('Windy désactivé (clé absente)');
     return parts.join(' · ') || null;
@@ -541,21 +575,23 @@ export const cameras = defineModule<CamerasData>({
       });
     if (show.windy && data.windy?.active) layers.push(webcamLayer('cameras/windy', sparseWindy(data.windy.list, view.zoom), 'webcam'));
     if (show.criter && data.criter) layers.push(webcamLayer('cameras/criter', data.criter.list, 'trafic'));
-    const chosenWebcam = picked?.family === 'windy' ? data.windy?.byId.get(picked.id) : picked?.family === 'criter' ? data.criter?.byId.get(picked.id) : undefined;
+    if (show.open && data.open) layers.push(webcamLayer('cameras/ouvertes', data.open.list, 'webcam'));
+    const chosenWebcam = picked?.family === 'windy' ? data.windy?.byId.get(picked.id) : picked?.family === 'criter' ? data.criter?.byId.get(picked.id) : picked?.family === 'open' ? data.open?.byId.get(picked.id) : undefined;
     if (chosenWebcam) layers.push(...selectionRing('cameras/webcam-choisie', [chosenWebcam], onGround, size * 0.72, OVER_MAP));
     return layers;
   },
 
   select(object) {
     const o = object as { id: number };
-    // Les trois familles se reconnaissent à leurs champs : `detail` (Windy), `image` (Criter), sinon OpenStreetMap.
-    const family: Family = 'detail' in o ? 'windy' : 'image' in o ? 'criter' : 'osm';
+    // Les familles se reconnaissent à leurs champs : `detail` (Windy), `image` (Criter), `page` (webcams ouvertes), sinon OpenStreetMap.
+    const family: Family = 'detail' in o ? 'windy' : 'image' in o ? 'criter' : 'page' in o ? 'open' : 'osm';
     return { family, id: o.id } satisfies Chosen;
   },
 
   focus(selection, { data }) {
     const pick = selection as Chosen | null;
-    const item = pick && (pick.family === 'osm' ? data?.osm?.byId.get(pick.id) : pick.family === 'windy' ? data?.windy?.byId.get(pick.id) : data?.criter?.byId.get(pick.id));
+    const byId = { osm: data?.osm?.byId, windy: data?.windy?.byId, criter: data?.criter?.byId, open: data?.open?.byId };
+    const item = pick && (byId[pick.family] as Map<number, { lon: number; lat: number }> | undefined)?.get(pick.id);
     return item ? { lon: item.lon, lat: item.lat, fixed: true } : null;
   },
 
@@ -597,6 +633,23 @@ export const cameras = defineModule<CamerasData>({
           ['Source', 'Métropole de Lyon, système Criter (Licence Ouverte 2.0)'],
         ],
         link: { href: CRITER_DATASET, label: 'Jeu de données' },
+      };
+    }
+
+    if (pick.family === 'open') {
+      const cam = data.open?.byId.get(pick.id);
+      if (!cam) return null;
+      return {
+        kind: 'Webcam · données ouvertes',
+        title: cam.name,
+        subtitle: cam.town || undefined,
+        status: plainStatus('Vue en direct sur la page de la webcam'),
+        fields: [
+          ['Lieu', cam.town || 'non renseigné'],
+          ['Source', `${cam.source}, data.gouv.fr (Licence Ouverte 2.0)`],
+        ],
+        note: 'Le jeu de données donne la position et la page de la webcam, pas son image : elle s’ouvre chez son éditeur, qui la publie volontairement.',
+        link: { href: cam.page, label: 'Voir la webcam' },
       };
     }
 
