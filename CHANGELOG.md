@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 17 novembre 2026 — Zones surveillées (veille) et orages
+
+- **Veille** : jusqu'à 12 zones (cercle, polygone, commune, département) ; Vigie prévient dans l'application quand il s'y passe quelque chose (vigilance orange ou rouge, crue, rivière en forte montée, incendie, séisme ressenti, brouillage GPS, avion militaire, train supprimé ou très en retard à une gare de la zone). Avis discret, liste des alertes, pastille, compteur dans le titre, son facultatif ; `Notification` seulement en contexte sûr (le site est en HTTP). Dédoublonnage par identifiant d'événement, zones gardées dans le navigateur et dans l'adresse (`veille=`), version téléphone (onglet de la feuille).
+- **Serveur** : `POST /api/veille` (`server/src/synthese/veille.rs`) évalue les zones sur un index national recalculé au plus toutes les 30 s depuis les caches en mémoire ; aucune requête externe, PRIM comprise.
+- **Synthèse** : rubrique « Orages » d'après la vigilance Météo-France (pas de source d'éclairs en points) ; marégraphes et estuaires retirés des rivières en forte montée (18 des 45 stations « montantes » du relevé étaient la marée).
+- **Tests** : `node --test web/scripts/veille.test.mjs` (géométrie, dédoublonnage, adresse, séismes) et tests Rust de `synthese::veille` et `rivers::is_tidal`.
+
 ## 17 novembre 2026 — Trains : même sens à tous les zooms
 
 - **Trains à l'arrêt tournés à l'envers selon le zoom** : le cap de l'icône (sous le zoom 13) était celui du tronçon *suivant* l'arrêt, alors que la rame dessinée voiture par voiture (zoom 13 et plus, à plat ou en 3D) s'étend derrière son *arrivée*. Pour un train qui repart en sens inverse (terminus, rebroussement) la tête de l'icône pointait donc à l'opposé du nez de la rame. Mesure sur le relevé du 16 novembre (05 h 30, 09 h, 17 h UTC) : 5, 5 et 12 trains à l'arrêt à 180° d'écart, plus aucun après correction ; en marche, aucun écart (500 trains sur 509 à moins de 25° du déplacement réel, les 9 autres sont des courbes).

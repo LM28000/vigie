@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { IControl, MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import type { ModuleManager } from '../core/moduleManager';
+import { useVeille } from '../core/veille';
 import {
   MAX_AREA_KM2,
   MAX_RADIUS_M,
@@ -91,7 +92,10 @@ class ZoneControl implements IControl {
 const ACCENT_RGB: [number, number, number] = [255, 138, 61];
 const closed = (ring: Position[]) => [...ring, ring[0]!];
 
-function overlayLayers(shape: ZoneShape | null, draft: ZoneShape | null, cursor: Position | null) {
+/** Les zones surveillées (panneau de veille ouvert) : un contour bleu, à part de l'orange de l'analyse. */
+const WATCH_RGB: [number, number, number] = [47, 111, 235];
+
+function overlayLayers(shape: ZoneShape | null, draft: ZoneShape | null, cursor: Position | null, watched: Position[][] = []) {
   const polygons: Position[][] = [];
   const paths: Position[][] = [];
   const vertices: Array<{ p: Position; first: boolean }> = [];
@@ -114,7 +118,15 @@ function overlayLayers(shape: ZoneShape | null, draft: ZoneShape | null, cursor:
     points.forEach((p, i) => vertices.push({ p, first: i === 0 }));
   }
   const common = { parameters: { depthCompare: 'always' as const } };
+  const watchedLayers = watched.length
+    ? [
+        new PolygonLayer<Position[]>({ id: 'veille-fill', data: watched, getPolygon: (d) => d, getFillColor: [...WATCH_RGB, 28], stroked: false, pickable: false, ...common }),
+        new PathLayer<Position[]>({ id: 'veille-halo', data: watched.map(closed), getPath: (d) => d, getColor: [255, 255, 255, 220], getWidth: 5, widthUnits: 'pixels', capRounded: true, jointRounded: true, pickable: false, ...common }),
+        new PathLayer<Position[]>({ id: 'veille-line', data: watched.map(closed), getPath: (d) => d, getColor: [...WATCH_RGB, 255], getWidth: 2.5, widthUnits: 'pixels', capRounded: true, jointRounded: true, pickable: false, ...common }),
+      ]
+    : [];
   return [
+    ...watchedLayers,
     new PolygonLayer<Position[]>({ id: 'zone-fill', data: polygons, getPolygon: (d) => d, getFillColor: [...ACCENT_RGB, 38], stroked: false, pickable: false, ...common }),
     new PathLayer<Position[]>({ id: 'zone-halo', data: paths, getPath: (d) => d, getColor: [255, 255, 255, 235], getWidth: 6, widthUnits: 'pixels', capRounded: true, jointRounded: true, pickable: false, ...common }),
     new PathLayer<Position[]>({ id: 'zone-line', data: paths, getPath: (d) => d, getColor: [...ACCENT_RGB, 255], getWidth: 3, widthUnits: 'pixels', capRounded: true, jointRounded: true, pickable: false, ...common }),
@@ -165,9 +177,13 @@ export function ZoneTool({ manager, phone }: { manager: ModuleManager; phone: bo
       map.removeControl(deck);
     };
   }, [map]);
+  // Les zones surveillées se montrent quand leur panneau est ouvert (ou pendant qu'on en dessine une).
+  const watch = useVeille();
+  const showWatched = watch.open || zone.purpose === 'veille';
+  const watched = useMemo(() => (showWatched ? watch.zones.map((z) => z.ring as Position[]) : []), [showWatched, watch.zones]);
   useEffect(() => {
-    overlay.current?.setProps({ layers: overlayLayers(zone.shape, zone.draft, cursor) });
-  }, [map, zone.shape, zone.draft, cursor]);
+    overlay.current?.setProps({ layers: overlayLayers(zone.shape, zone.draft, cursor, watched) });
+  }, [map, zone.shape, zone.draft, cursor, watched]);
 
   // Sur téléphone, le panneau couvre le bas de l'écran : à chaque nouvelle zone, on la cadre dans ce qui reste visible.
   useEffect(() => {
@@ -225,7 +241,7 @@ export function ZoneTool({ manager, phone }: { manager: ModuleManager; phone: bo
 
 /** La barre de dessin : choix de la forme, consigne, mesure en direct. */
 function DrawBar({ phone }: { phone: boolean }) {
-  const { mode, draft } = useZone();
+  const { mode, draft, purpose } = useZone();
   const radius = draft?.kind === 'circle' ? draft.radius : 0;
   const vertices = draft?.kind === 'polygon' ? draft.points.length : 0;
   const area = draft && (draft.kind === 'circle' ? radius > 0 : vertices >= 3) ? shapeAreaKm2(draft) : 0;
@@ -237,10 +253,16 @@ function DrawBar({ phone }: { phone: boolean }) {
         ? phone ? 'Touchez la carte pour poser les sommets' : 'Cliquez pour poser les sommets'
         : `${vertices} sommet${vertices > 1 ? 's' : ''}${area > 0 ? ` · ${fmtArea(area)}` : ''}${phone ? '' : ' · double-clic pour fermer'}`;
   return (
-    <div className="zone-bar panel" role="toolbar" aria-label="Dessiner une zone">
+    <div className="zone-bar panel" role="toolbar" aria-label={purpose === 'veille' ? 'Dessiner une zone à surveiller' : 'Dessiner une zone'}>
+      {purpose === 'veille' && (
+        <span className="zone-bar__purpose">
+          <Icon name="veille" size={16} />
+          Zone à surveiller
+        </span>
+      )}
       <div className="zone-bar__modes" role="radiogroup" aria-label="Forme de la zone">
         {(['circle', 'polygon'] as const).map((m) => (
-          <button key={m} type="button" role="radio" aria-checked={mode === m} className={`zone-bar__mode${mode === m ? ' is-on' : ''}`} onClick={() => zoneStore.startDrawing(m)}>
+          <button key={m} type="button" role="radio" aria-checked={mode === m} className={`zone-bar__mode${mode === m ? ' is-on' : ''}`} onClick={() => zoneStore.switchMode(m)}>
             {m === 'circle' ? 'Cercle' : 'Polygone'}
           </button>
         ))}

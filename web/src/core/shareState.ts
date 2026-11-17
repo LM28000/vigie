@@ -15,6 +15,7 @@
  *   zone=c:2.35,48.85,5000           zone de l'analyse (cercle : centre et rayon en m ; polygone : `p:lon,lat;lon,lat…`), voir `zone.ts`
  *   zscrutin=l24t2                   scrutin du panneau d'analyse de zone
  *   synthese=1                       panneau « Aujourd'hui en France » ouvert (absent : fermé), voir `synthese.ts`
+ *   veille=d:33!!Gironde~c:2.35,48.85,5000!train,crue!Paris   zones surveillées : `définition!types!nom` séparées par `~` (types absents : ceux par défaut), voir `veilleLogic.ts`
  *   vision=thermique   mode de vision de la carte (nocturne, thermique, cathodique), absent : normal (voir `vision.ts`)
  *
  * Les préférences du navigateur (`localStorage`) restent la valeur par défaut quand
@@ -23,10 +24,11 @@
 import { clock } from './clock';
 import type { ModuleManager } from './moduleManager';
 import { synthese } from './synthese';
+import { veille, veilleUrl } from './veille';
 import { isVisionMode, vision } from './vision';
 import { zoneUrl } from './zone';
 
-const KEYS = ['couches', 'reglages', 't', 'vitesse', 'pause', 'objet', 'depuis', 'zone', 'zscrutin', 'vision', 'synthese'] as const;
+const KEYS = ['couches', 'reglages', 't', 'vitesse', 'pause', 'objet', 'depuis', 'zone', 'zscrutin', 'vision', 'synthese', 'veille'] as const;
 /** Drapeau de l'adresse qui lance la visite guidée (`#visite`). Ce n'est pas un état à rouvrir : il est retiré dès qu'il est lu. */
 const TOUR_FLAG = 'visite';
 /** Pendant un rejeu en lecture, l'instant de l'adresse est rafraîchi à ce rythme. */
@@ -114,6 +116,10 @@ export function applySharedState(manager: ModuleManager, fragment?: string): voi
 
   synthese.set(params.get('synthese') === '1');
 
+  // Les zones surveillées de l'adresse s'ajoutent à celles du navigateur (celles qui existent déjà ne sont pas doublées).
+  const watched = safeDecode(params.get('veille') ?? '');
+  if (watched) veilleUrl.write(watched);
+
   const object = params.get('objet');
   if (object) {
     const colon = object.indexOf(':');
@@ -167,6 +173,9 @@ function stateParams(manager: ModuleManager): Array<[string, string]> {
 
   if (synthese.getSnapshot()) ours.push(['synthese', '1']);
 
+  const watched = veilleUrl.read();
+  if (watched) ours.push(['veille', encodeURIComponent(watched)]);
+
   const selection = manager.getSelection();
   if (selection) ours.push(['objet', `${encodeURIComponent(selection.moduleId)}:${encodeURIComponent(JSON.stringify(selection.value))}`]);
 
@@ -217,6 +226,7 @@ export function startSharedStateSync(manager: ModuleManager): () => void {
   const unsubscribeClock = clock.subscribe(schedule);
   const unsubscribeVision = vision.subscribe(schedule);
   const unsubscribeSynthese = synthese.subscribe(schedule);
+  const unsubscribeVeille = veille.subscribe(schedule);
   // Un rejeu en lecture avance sans que rien ne change : on rafraîchit l'instant de temps en temps.
   const replayTimer = setInterval(() => {
     const { live, playing } = clock.getState();
@@ -232,6 +242,7 @@ export function startSharedStateSync(manager: ModuleManager): () => void {
     unsubscribeClock();
     unsubscribeVision();
     unsubscribeSynthese();
+    unsubscribeVeille();
     window.removeEventListener('pagehide', flush);
   };
 }

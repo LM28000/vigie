@@ -23,6 +23,15 @@ const PATHS: Record<string, string> = {
   refresh: 'M19.5 11a7.5 7.5 0 0 0-13.4-3.5M5 4v3.5h3.5M4.5 13a7.5 7.5 0 0 0 13.4 3.5M19 20v-3.5h-3.5',
   // « Aujourd'hui » : un soleil levé sur l'horizon.
   aujourdhui: 'M4 18h16M7 18a5 5 0 0 1 10 0M12 5v2.5M5.2 9.2l1.8 1.8M18.8 9.2 17 11M3 14h1.5M19.5 14H21',
+  // « Veille » : une cloche (alertes sur les zones surveillées).
+  veille: 'M6 17h12l-1.5-2.2V10.5a4.5 4.5 0 0 0-9 0v4.3ZM10 20a2 2 0 0 0 4 0',
+  // « Orages » : un nuage et un éclair.
+  orages: 'M7 14a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17 14ZM12.5 12l-2.5 4h3l-1.5 4',
+  foudre: 'M7 14a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17 14ZM12.5 12l-2.5 4h3l-1.5 4',
+  son: 'M5 9.5v5h3.5L13 18V6L8.5 9.5ZM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11',
+  'son-coupe': 'M5 9.5v5h3.5L13 18V6L8.5 9.5ZM16.5 9.5l5 5M21.5 9.5l-5 5',
+  corbeille: 'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7M10 11v5M14 11v5',
+  plus: 'M12 5v14M5 12h14',
   rivieres: 'M3 18c3-2.5 6 2.5 9 0s6 2.5 9 0M12 14V4M8.5 7.5 12 4l3.5 3.5',
   'brouillage-gps': 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM6.3 6.3l11.4 11.4M12 9v.01',
   // Couches (une par module)

@@ -5,7 +5,7 @@ Vigie est composée de deux programmes :
 - un **site** (`web/`) en TypeScript, React 19, MapLibre GL JS 5.24 (fond de carte, relief, globe) et deck.gl 9.4 (couches de données, maquettes 3D), construit avec Vite ;
 - un **serveur** (`server/`) en Rust (édition 2024, tokio, axum), qui collecte et prépare les données, calcule (tracés de trains, isochrones RAPTOR, analyse de zone), enregistre l'historique, fabrique et sert ses propres tuiles vectorielles, et sert aussi le site construit.
 
-Le navigateur contacte directement quelques services ouverts sans clé : le fond de carte (OpenFreeMap), le relief (Mapterhorn), l'IGN Géoplateforme (photos anciennes, LiDAR HD, géocodage), RainViewer, EUMETView (foudre), NASA GIBS (satellite du jour), Vigicrues, ODRÉ (éCO2mix), l'EMSC (séismes) et data.economie.gouv.fr (carburants). Toutes les autres sources passent par le serveur, qui garde les clés.
+Le navigateur contacte directement quelques services ouverts sans clé : le fond de carte (OpenFreeMap), le relief (Mapterhorn), l'IGN Géoplateforme (photos anciennes, LiDAR HD, géocodage), RainViewer, EUMETView (foudre), NASA GIBS (satellite du jour), geo.api.gouv.fr (contour d'une commune, à la création d'une zone surveillée), Vigicrues, ODRÉ (éCO2mix), l'EMSC (séismes) et data.economie.gouv.fr (carburants). Toutes les autres sources passent par le serveur, qui garde les clés.
 
 ## Vue d'ensemble
 
@@ -61,6 +61,7 @@ flowchart LR
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
 | `parkings.rs` | Places libres des parkings de 9 agglomérations (portails ouverts), format commun et historique de 24 h. |
 | `synthese.rs` | « Aujourd'hui en France » : résumé des réponses déjà en mémoire des autres collecteurs (`GET /api/synthese`), sans requête externe, gardé 30 s. |
+| `synthese/veille.rs` | Zones surveillées (`POST /api/veille`) : un index national d'événements (vigilance, crues, rivières, feux, brouillage, avions militaires, trains en retard ou supprimés) recalculé au plus toutes les 30 s à partir des mêmes caches, filtré par zone (point dans le contour, départements). Aucune requête externe, aucune zone ni alerte gardée côté serveur. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `rivers.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, rivières (Hub'Eau), feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
@@ -69,7 +70,7 @@ flowchart LR
 | `history/` | Enregistrement et relecture : voir [historique-et-relecture.md](historique-et-relecture.md). |
 | `state.rs`, `api.rs`, `main.rs` | État partagé, routes HTTP, démarrage et réglages (voir [deploiement.md](deploiement.md)). |
 
-Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/rivieres`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
+Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/rivieres`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/synthese`, `/api/veille`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
 
 ## Le site (`web/src/`)
 

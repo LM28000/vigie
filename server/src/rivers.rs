@@ -288,6 +288,31 @@ fn in_france(lon: f64, lat: f64) -> bool {
 const JUMP_MM: i32 = 1000;
 const JUMP_RATE_M_PER_H: f64 = 10.0;
 
+/// Vrai pour une station soumise à la marée : sa hauteur monte de 1 à 3 m en 3 h deux fois par jour sans que ce soit une crue
+/// (relevé du 17 novembre 2026 : sur 45 stations « en forte montée », 18 étaient des marégraphes ou des estuaires, dont la
+/// Garonne à Cadillac, +3,05 m). Hub'Eau n'a pas de drapeau pour cela : on s'appuie sur le nom (« [Marégraphe] », « [La Manche] »,
+/// « [La Gironde] », « Station GPMB » du port de Bordeaux…) et sur les estuaires où la marée remonte les fleuves.
+pub fn is_tidal(name: &str, lon: f64, lat: f64) -> bool {
+    let lower = name.to_lowercase();
+    if lower.contains("marégraphe") || lower.contains("maregraphe") || lower.contains("gpmb") || lower.contains("[port de") {
+        return true;
+    }
+    // Un nom qui commence par un crochet est celui d'une étendue de mer ou d'estuaire (« [La Manche] à Cancale », « [Océan] à… »).
+    if name.trim_start().starts_with('[') {
+        return true;
+    }
+    // Estuaires et biefs maritimes (rectangles larges, volontairement) : Gironde, Garonne jusqu'à Langon, Dordogne jusqu'à
+    // Libourne ; Loire en aval d'Ancenis ; Seine en aval de Poses ; Charente ; Adour, Nive et gaves réunis.
+    const TIDAL_AREAS: [(f64, f64, f64, f64); 5] = [
+        (-1.25, 44.50, -0.15, 45.65),
+        (-2.30, 47.15, -1.30, 47.40),
+        (0.00, 49.20, 1.40, 49.55),
+        (-1.10, 45.80, -0.60, 46.05),
+        (-1.60, 43.40, -1.00, 43.60),
+    ];
+    TIDAL_AREAS.iter().any(|&(west, south, east, north)| lon >= west && lon <= east && lat >= south && lat <= north)
+}
+
 /// Les hauteurs depuis le dernier saut : avant lui, l'échelle n'est plus la même. Sans saut, tout.
 fn reliable_tail(heights: &[(i64, i32)]) -> &[(i64, i32)] {
     let jump = heights.windows(2).rposition(|w| {
@@ -673,6 +698,25 @@ mod tests {
         assert_eq!(points.len(), 1);
         assert_eq!(points[0].0, "O001004003");
         assert_eq!(points[0].2, 10200.0);
+    }
+
+    #[test]
+    fn recognises_tidal_stations_and_keeps_real_rivers() {
+        // Relevé réel du 17 novembre 2026 : tous montaient de plus de 1,5 m en 3 h à cause de la marée.
+        assert!(is_tidal("[La Manche] à Cancale - [Marégraphe] - Port de Cancale", -1.85172, 48.66839));
+        assert!(is_tidal("La Garonne à Cadillac", -0.32422, 44.63555));
+        assert!(is_tidal("La Dordogne à Libourne", -0.24883, 44.91292));
+        assert!(is_tidal("La Garonne à Bordeaux - Station GPMB", -0.55256, 44.85951));
+        assert!(is_tidal("La Penfeld [Marégraphe] à Brest", -4.49499, 48.38225));
+        assert!(is_tidal("Le Jarlot [La rivière de Morlaix] à Morlaix [Port de Morlaix] - Les Ecluses [aval]", -3.83828, 48.58866));
+        assert!(is_tidal("La Loire à Mauves-sur-Loire", -1.37901, 47.2956));
+        assert!(is_tidal("L'Aulne à Port-Launay - Guily Glaz [marégraphe]", -4.09519, 48.21267));
+        // Des rivières qui montent vraiment (crues du jour) ne sont pas la marée.
+        assert!(!is_tidal("L'Isère à Grenoble [Bastille]", 5.725, 45.19299));
+        assert!(!is_tidal("La Liane à Wirwignes", 1.76758, 50.6812));
+        assert!(!is_tidal("La Moselle à Hagondange", 6.18482, 49.25589));
+        assert!(!is_tidal("La Garonne à Toulouse", 1.43, 43.6));
+        assert!(!is_tidal("Le Layon à Saint-Georges-sur-Layon", -0.37448, 47.193));
     }
 
     #[test]

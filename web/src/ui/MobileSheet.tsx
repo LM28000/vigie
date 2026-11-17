@@ -6,6 +6,9 @@ import { Icon } from './icons';
 import { InfoBody, InfoSummary } from './InfoPanel';
 import { LayerCatalog } from './LayerDrawer';
 import { SyntheseView } from './Synthese';
+import { VeilleView } from './Veille';
+import { useVeille } from '../core/veille';
+import { unreadCount } from '../core/veilleLogic';
 import { LivePill, TimeBar } from './TimeBar';
 
 export type Snap = 'peek' | 'half' | 'full';
@@ -48,6 +51,9 @@ interface MobileSheetProps {
   /** Onglet « Aujourd'hui » (la synthèse) ouvert ou non, et son changement. */
   todayOpen: boolean;
   onToday: (open: boolean) => void;
+  /** Onglet « Veille » (zones surveillées) ouvert ou non, et son changement. */
+  veilleOpen: boolean;
+  onVeille: (open: boolean) => void;
   /** Un clic sur une ligne de la synthèse : la feuille se réduit pour laisser voir la carte. */
   onTodayPicked: () => void;
 }
@@ -56,8 +62,9 @@ interface MobileSheetProps {
  * Feuille du téléphone, tirée du bas. Trois hauteurs : poignée (fiche résumée ou heure),
  * moitié (fiche ou catalogue, et frise compacte), plein écran. On la tire au doigt.
  */
-export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, todayOpen, onToday, onTodayPicked }: MobileSheetProps) {
+export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, todayOpen, onToday, veilleOpen, onVeille, onTodayPicked }: MobileSheetProps) {
   const { selection, info } = useSelectionInfo(manager);
+  const unread = unreadCount(useVeille().alerts);
   const [tab, setTab] = useState<'fiche' | 'couches'>('couches');
   const [viewport, setViewport] = useState(() => window.innerHeight);
   const [dragHeight, setDragHeight] = useState<number | null>(null);
@@ -65,7 +72,7 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
   const sectionRef = useRef<HTMLElement>(null);
 
   /** Ce que la feuille montre : la synthèse si elle est ouverte, sinon la fiche de l'objet (onglet choisi) ou le catalogue. */
-  const view: 'fiche' | 'couches' | 'aujourdhui' = todayOpen ? 'aujourdhui' : selection && info && tab === 'fiche' ? 'fiche' : 'couches';
+  const view: 'fiche' | 'couches' | 'aujourdhui' | 'veille' = veilleOpen ? 'veille' : todayOpen ? 'aujourdhui' : selection && info && tab === 'fiche' ? 'fiche' : 'couches';
 
   const peek = selection ? PEEK_HEIGHT_WITH_SELECTION : PEEK_HEIGHT;
   const heights: Record<Snap, number> = { peek, half: Math.round(viewport * 0.56), full: viewport - FULL_TOP_GAP };
@@ -96,7 +103,10 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
   const openedFor = useRef('');
   useEffect(() => {
     setTab(selectionKey ? 'fiche' : 'couches');
-    if (selectionKey) onToday(false);
+    if (selectionKey) {
+      onToday(false);
+      onVeille(false);
+    }
     if (selectionKey && hasImage && openedFor.current !== selectionKey) onSnap('half');
     openedFor.current = selectionKey && hasImage ? selectionKey : '';
   }, [selectionKey, hasImage]);
@@ -226,10 +236,17 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
             hasSelection={!!selection}
             onOpen={() => {
               onToday(false);
+              onVeille(false);
               onSnap('half');
             }}
             onOpenToday={() => {
+              onVeille(false);
               onToday(true);
+              onSnap('half');
+            }}
+            onOpenVeille={() => {
+              onToday(false);
+              onVeille(true);
               onSnap('half');
             }}
           />
@@ -243,6 +260,7 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
                 className="sheet__tab"
                 onClick={() => {
                   onToday(false);
+                  onVeille(false);
                   setTab('fiche');
                 }}
               >
@@ -256,13 +274,36 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
               className="sheet__tab"
               onClick={() => {
                 onToday(false);
+                onVeille(false);
                 setTab('couches');
               }}
             >
               Couches
             </button>
-            <button type="button" role="tab" aria-selected={view === 'aujourdhui'} className="sheet__tab" onClick={() => onToday(true)}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'aujourdhui'}
+              className="sheet__tab"
+              onClick={() => {
+                onVeille(false);
+                onToday(true);
+              }}
+            >
               Aujourd’hui
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'veille'}
+              className="sheet__tab"
+              onClick={() => {
+                onToday(false);
+                onVeille(true);
+              }}
+            >
+              Veille
+              {unread > 0 && <span className="chip__badge">{unread > 99 ? '99+' : unread}</span>}
             </button>
           </div>
         )}
@@ -277,6 +318,8 @@ export function MobileSheet({ manager, snap, onSnap, expandedId, onExpand, today
               </div>
             ) : view === 'aujourdhui' ? (
               <SyntheseView manager={manager} phone onPicked={onTodayPicked} />
+            ) : view === 'veille' ? (
+              <VeilleView manager={manager} phone onPicked={onTodayPicked} />
             ) : (
               <LayerCatalog manager={manager} expandedId={expandedId} onExpand={onExpand} />
             )}
@@ -297,13 +340,16 @@ function PeekRow({
   hasSelection,
   onOpen,
   onOpenToday,
+  onOpenVeille,
 }: {
   manager: ModuleManager;
   info: ReturnType<ModuleManager['describeSelection']>;
   hasSelection: boolean;
   onOpen: () => void;
   onOpenToday: () => void;
+  onOpenVeille: () => void;
 }) {
+  const unread = unreadCount(useVeille().alerts);
   const { live } = useClockState();
   const time = useClockTime(1_000);
   if (hasSelection && info) {
@@ -329,6 +375,16 @@ function PeekRow({
       </button>
       <button type="button" className="chip chip--today chip--icon" onClick={onOpenToday} aria-label="Aujourd’hui en France" title="Aujourd’hui en France">
         <Icon name="aujourdhui" size={18} />
+      </button>
+      <button
+        type="button"
+        className="chip chip--today chip--icon chip--veille"
+        onClick={onOpenVeille}
+        aria-label={unread > 0 ? `Veille, ${unread} alerte${unread > 1 ? 's' : ''} non lue${unread > 1 ? 's' : ''}` : 'Veille : zones surveillées'}
+        title="Veille : zones surveillées"
+      >
+        <Icon name="veille" size={18} />
+        {unread > 0 && <span className="chip__badge chip__badge--corner">{unread > 99 ? '99+' : unread}</span>}
       </button>
     </div>
   );
