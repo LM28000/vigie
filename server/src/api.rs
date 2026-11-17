@@ -18,6 +18,7 @@
 //! - `GET /api/trafic` : événements routiers (Bison Futé) ; `GET /api/trafic/etat` : état de la circulation.
 //! - `GET /api/vigilance` : vigilance météo par département (Météo-France).
 //! - `GET /api/synthese` : « Aujourd'hui en France », ce qui compte en ce moment (vigilances, crues, feux, trains en retard…), résumé des réponses déjà en mémoire : aucune requête externe.
+//! - `POST /api/veille` : zones surveillées, ce qui s'y passe en ce moment (vigilance, crues, rivières, feux, brouillage, avions militaires, trains) d'après les mêmes réponses en mémoire : aucune requête externe.
 //! - `GET /api/marees` : niveau de la mer aux marégraphes (Shom, REFMAR), 48 h de mesures et estimation des marées.
 //! - `GET /api/rivieres` : hauteur, débit et tendance sur 3 h des stations hydrométriques (Hub'Eau) ; `GET /api/rivieres/{code}` : courbe de 48 h d'une station.
 //! - `GET /api/air` : indice ATMO de qualité de l'air par commune, et épisodes de pollution (Atmo France / AASQA).
@@ -95,6 +96,7 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/trafic", get(|State(state): State<AppState>| async move { prepared(state.traffic(), "trafic") }))
         .route("/api/trafic/etat", get(|State(state): State<AppState>| async move { prepared(state.traffic_state(), "état du trafic") }))
         .route("/api/synthese", get(crate::synthese::handler))
+        .route("/api/veille", post(crate::synthese::veille::handler))
         .route("/api/vigilance", get(|State(state): State<AppState>| async move { prepared(state.vigilance(), "vigilance") }))
         .route("/api/marees", get(|State(state): State<AppState>| async move { prepared(state.tides(), "marées") }))
         .route("/api/air", get(air))

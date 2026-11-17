@@ -1,4 +1,6 @@
 import type { ModuleManager } from '../core/moduleManager';
+import { useVeille } from '../core/veille';
+import { unreadCount } from '../core/veilleLogic';
 import { useModuleStates } from './hooks';
 import { Icon } from './icons';
 import { leadingCount, swatchBackground } from './layerInfo';
@@ -13,14 +15,18 @@ interface LayerChipsProps {
   /** Bouton « Aujourd'hui » (ordinateur : sur téléphone, il est dans la feuille). */
   onToggleToday?: () => void;
   todayOpen?: boolean;
+  /** Bouton « Veille » (zones surveillées) : ordinateur seulement. */
+  onToggleVeille?: () => void;
+  veilleOpen?: boolean;
 }
 
 /**
  * Pastilles des couches affichées : échantillon de couleur, nom, compteur court si le résumé
  * en donne un, et une croix pour masquer. Un clic sur la pastille ouvre ses réglages.
  */
-export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen, onToggleToday, todayOpen }: LayerChipsProps) {
+export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen, onToggleToday, todayOpen, onToggleVeille, veilleOpen }: LayerChipsProps) {
   const states = useModuleStates(manager);
+  const unread = unreadCount(useVeille().alerts);
   const shown = manager.modules.filter((module) => states[module.id]?.visible);
 
   return (
@@ -67,6 +73,20 @@ export function LayerChips({ manager, onOpenLayer, onOpenCatalog, catalogOpen, o
         <button type="button" className="chip chip--today" aria-pressed={!!todayOpen} onClick={onToggleToday} title="Aujourd’hui en France : ce qui compte en ce moment (A)">
           <Icon name="aujourdhui" size={16} />
           Aujourd’hui
+        </button>
+      )}
+      {onToggleVeille && (
+        <button
+          type="button"
+          className="chip chip--today chip--veille"
+          aria-pressed={!!veilleOpen}
+          onClick={onToggleVeille}
+          title="Veille : vos zones surveillées et leurs alertes (S)"
+          aria-label={unread > 0 ? `Veille, ${unread} alerte${unread > 1 ? 's' : ''} non lue${unread > 1 ? 's' : ''}` : 'Veille'}
+        >
+          <Icon name="veille" size={16} />
+          Veille
+          {unread > 0 && <span className="chip__badge">{unread > 99 ? '99+' : unread}</span>}
         </button>
       )}
     </div>

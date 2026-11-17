@@ -23,6 +23,8 @@ use jiff::tz::TimeZone;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
+pub mod veille;
+
 use crate::network::Network;
 use crate::realtime::Realtime;
 use crate::rivers::{self, FloodSection};
@@ -89,6 +91,8 @@ pub struct VigilancePeriod {
     /// Nombre de départements en orange ou plus, et en rouge.
     pub orange: usize,
     pub red: usize,
+    /// Départements en vigilance jaune pour les orages (phénomène 3) : jaunes presque tous les soirs d'été, ils ne se disent pas comme un orange.
+    pub storm_yellow: usize,
     /// Orange et rouge seulement, par phénomène et niveau, les plus graves puis les plus étendus d'abord.
     pub groups: Vec<VigilanceGroup>,
 }
@@ -323,6 +327,9 @@ struct InStation {
     t: i64,
     d: Option<i32>,
     vig: Option<u8>,
+    /// Nom du tronçon Vigicrues voisin (la veille s'en sert pour ne signaler qu'une fois un même tronçon).
+    #[serde(rename = "vigName")]
+    vig_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -436,7 +443,7 @@ fn vigilance(body: &Option<Bytes>, now: i64) -> Option<VigilanceOut> {
         .filter(|(_, p)| p.end > now)
         .map(|(index, period)| {
             let mut groups: BTreeMap<(u8, u8), Vec<String>> = BTreeMap::new();
-            let (mut orange, mut red) = (0, 0);
+            let (mut orange, mut red, mut storm_yellow) = (0, 0, 0);
             for (code, entries) in &input.departments {
                 let Some(entry) = entries.get(index) else { continue };
                 if entry.max >= 3 {
@@ -444,6 +451,9 @@ fn vigilance(body: &Option<Bytes>, now: i64) -> Option<VigilanceOut> {
                 }
                 if entry.max >= 4 {
                     red += 1;
+                }
+                if entry.phenomena.iter().any(|p| p.id == 3 && p.level == 2) {
+                    storm_yellow += 1;
                 }
                 for phenomenon in entry.phenomena.iter().filter(|p| p.level >= 3) {
                     groups.entry((phenomenon.id, phenomenon.level)).or_default().push(code.clone());
@@ -462,6 +472,7 @@ fn vigilance(body: &Option<Bytes>, now: i64) -> Option<VigilanceOut> {
                 current: period.begin <= now && now < period.end,
                 orange,
                 red,
+                storm_yellow,
                 groups,
             }
         })
@@ -485,8 +496,12 @@ const MAX_RIVERS: usize = 5;
 
 fn rivers(body: &Option<Bytes>, now: i64) -> Option<RiversOut> {
     let input: InRivers = decoded("rivières", body)?;
-    let mut rising: Vec<&InStation> =
-        input.stations.iter().filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM)).collect();
+    // La marée fait monter les marégraphes et les estuaires de 1 à 3 m en 3 h : ce n'est pas une crue (voir `rivers::is_tidal`).
+    let mut rising: Vec<&InStation> = input
+        .stations
+        .iter()
+        .filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM) && !rivers::is_tidal(&s.name, s.lon, s.lat))
+        .collect();
     // Les montées les plus fortes d'abord ; à montée égale, celles qui sont déjà en vigilance.
     rising.sort_by(|a, b| b.d.cmp(&a.d).then(b.vig.cmp(&a.vig)).then(a.id.cmp(&b.id)));
     let rising_count = rising.len();
@@ -510,18 +525,24 @@ fn rivers(body: &Option<Bytes>, now: i64) -> Option<RiversOut> {
 /// Le site retient ceux qui sont en France (le carré de détection déborde sur la Belgique, l'Espagne, l'Italie…) : on en envoie plus qu'il n'en montre.
 const MAX_FIRES: usize = 12;
 
-fn fires(body: &Option<Bytes>, now: i64) -> Option<FiresOut> {
-    let input: InFires = decoded("feux", body)?;
-    let recent: Vec<&InFire> = input.fires.iter().filter(|f| now - f.time < FIRE_WINDOW_S && f.confidence != "l").collect();
-    #[derive(Default)]
-    struct Cluster<'a> {
-        total: f64,
-        count: usize,
-        latest: i64,
-        strongest: Option<&'a InFire>,
-    }
+/// Un regroupement de détections dans une case de `FIRE_CELL_DEG` degrés.
+#[derive(Default)]
+struct Cluster<'a> {
+    total: f64,
+    count: usize,
+    latest: i64,
+    strongest: Option<&'a InFire>,
+}
+
+/// Les détections des dernières 24 h, sans celles de fiabilité faible.
+fn recent_fires(input: &InFires, now: i64) -> Vec<&InFire> {
+    input.fires.iter().filter(|f| now - f.time < FIRE_WINDOW_S && f.confidence != "l").collect()
+}
+
+/// Regroupe par case de 0,1° ; la clé est l'indice de la case (stable d'un relevé à l'autre : elle sert d'identifiant à la veille).
+fn cluster_fires<'a>(recent: &[&'a InFire]) -> HashMap<(i32, i32), Cluster<'a>> {
     let mut clusters: HashMap<(i32, i32), Cluster> = HashMap::new();
-    for fire in &recent {
+    for &fire in recent {
         let key = ((fire.lon / FIRE_CELL_DEG).floor() as i32, (fire.lat / FIRE_CELL_DEG).floor() as i32);
         let cluster = clusters.entry(key).or_default();
         cluster.total += fire.frp;
@@ -531,6 +552,13 @@ fn fires(body: &Option<Bytes>, now: i64) -> Option<FiresOut> {
             cluster.strongest = Some(fire);
         }
     }
+    clusters
+}
+
+fn fires(body: &Option<Bytes>, now: i64) -> Option<FiresOut> {
+    let input: InFires = decoded("feux", body)?;
+    let recent = recent_fires(&input, now);
+    let clusters = cluster_fires(&recent);
     let mut notable: Vec<Cluster> = clusters.into_values().filter(|c| c.total >= FIRE_NOTABLE_MW).collect();
     notable.sort_by(|a, b| {
         b.total.total_cmp(&a.total).then_with(|| {
@@ -860,6 +888,21 @@ mod tests {
         assert_eq!(out.rising_count, 2, "299 mm, une mesure vieille de 5 h et une station sans tendance ne comptent pas");
         assert_eq!(out.items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), vec!["a", "b"]);
         assert_eq!(out.items[1].vig, Some(3));
+    }
+
+    #[test]
+    fn leaves_the_tide_out_of_the_rising_rivers() {
+        let body = format!(
+            r#"{{"updatedAt":{NOW},"stations":[
+              {{"id":"O960001001","name":"La Garonne à Cadillac","river":"La Garonne","lon":-0.32422,"lat":44.63555,"h":2240,"t":{t},"d":3050}},
+              {{"id":"J050000101","name":"[La Manche] à Cancale - [Marégraphe] - Port de Cancale","lon":-1.85172,"lat":48.66839,"h":1630,"t":{t},"d":2489}},
+              {{"id":"E530021001","name":"La Liane à Isques","river":"La Liane","lon":1.6333,"lat":50.68073,"h":2419,"t":{t},"d":327,"vig":2}}
+            ]}}"#,
+            t = NOW - 600
+        );
+        let out = rivers(&bytes(&body), NOW).unwrap();
+        assert_eq!(out.rising_count, 1);
+        assert_eq!(out.items[0].id, "E530021001");
     }
 
     #[test]

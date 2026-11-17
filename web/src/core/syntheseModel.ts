@@ -22,6 +22,8 @@ export interface ApiSynthese {
       current: boolean;
       orange: number;
       red: number;
+      /** Départements en vigilance jaune pour les orages. */
+      stormYellow: number;
       groups: Array<{ phenomenon: number; level: number; departments: string[] }>;
     }>;
   } | null;
@@ -117,7 +119,7 @@ export interface Row {
   action?: Action;
 }
 
-export type RubricId = 'vigilance' | 'crues' | 'rivieres' | 'incendies' | 'seismes' | 'air' | 'trains' | 'brouillage' | 'avions';
+export type RubricId = 'vigilance' | 'orages' | 'crues' | 'rivieres' | 'incendies' | 'seismes' | 'air' | 'trains' | 'brouillage' | 'avions';
 
 export interface Rubric {
   id: RubricId;
@@ -137,7 +139,7 @@ export interface Rubric {
 }
 
 /** L'ordre des rubriques à gravité égale. */
-const ORDER: RubricId[] = ['vigilance', 'crues', 'rivieres', 'incendies', 'seismes', 'air', 'trains', 'brouillage', 'avions'];
+const ORDER: RubricId[] = ['vigilance', 'orages', 'crues', 'rivieres', 'incendies', 'seismes', 'air', 'trains', 'brouillage', 'avions'];
 
 export interface Digest {
   /** Rubriques avec quelque chose de notable, les plus graves d'abord. */
@@ -210,6 +212,13 @@ function loadDepartments(): Department[] {
   return departmentList;
 }
 
+/** Tous les départements (code, nom), dans l'ordre des codes. */
+export function allDepartments(): Array<{ code: string; name: string }> {
+  return loadDepartments()
+    .map(({ code, name }) => ({ code, name }))
+    .sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true }));
+}
+
 export function departmentByCode(code: string): Department | undefined {
   return loadDepartments().find((department) => department.code === code);
 }
@@ -265,10 +274,24 @@ function ago(seconds: number, now: number): string {
 
 // --- Rubriques --------------------------------------------------------------------------------------------------------
 
-function vigilanceRubric(data: NonNullable<ApiSynthese['vigilance']>): Rubric {
-  const today = data.periods.find((p) => p.current) ?? data.periods[0];
-  const tomorrow = data.periods.find((p) => p !== today && p.begin >= (today?.end ?? 0));
-  const rows: Row[] = (today?.groups ?? []).map((group) => {
+type VigilancePeriod = NonNullable<ApiSynthese['vigilance']>['periods'][number];
+type VigilanceGroups = VigilancePeriod['groups'];
+
+/** Orages : phénomène 3 de la vigilance (ils ont leur rubrique, avec le renvoi vers la couche Foudre). */
+const STORM = 3;
+
+/** Départements en orange (sans le rouge) et en rouge d'un ensemble de groupes. */
+function groupCounts(groups: VigilanceGroups): { orange: number; red: number } {
+  const red = new Set<string>();
+  const orange = new Set<string>();
+  for (const group of groups) for (const code of group.departments) (group.level >= 4 ? red : orange).add(code);
+  for (const code of red) orange.delete(code);
+  return { orange: orange.size, red: red.size };
+}
+
+/** Une ligne par groupe (phénomène, niveau) : le département seul s'ouvre sur sa fiche, plusieurs se cadrent. */
+function vigilanceRows(groups: VigilanceGroups): Row[] {
+  return groups.map((group) => {
     const single = group.departments.length === 1 ? departmentByCode(group.departments[0]!) : undefined;
     const bounds = unionBounds(group.departments);
     return {
@@ -283,12 +306,25 @@ function vigilanceRubric(data: NonNullable<ApiSynthese['vigilance']>): Rubric {
           : { kind: 'view', moduleId: 'vigilance-meteo', ...FRANCE },
     };
   });
-  const red = today?.red ?? 0;
-  const orange = (today?.orange ?? 0) - red;
-  const tomorrowAlert = tomorrow ? tomorrow.orange : 0;
+}
+
+function currentAndNext(data: NonNullable<ApiSynthese['vigilance']>) {
+  const today = data.periods.find((p) => p.current) ?? data.periods[0];
+  const tomorrow = data.periods.find((p) => p !== today && p.begin >= (today?.end ?? 0));
+  return { today, tomorrow };
+}
+
+function vigilanceRubric(data: NonNullable<ApiSynthese['vigilance']>): Rubric {
+  const { today, tomorrow } = currentAndNext(data);
+  // Les orages ont leur propre rubrique (`stormsRubric`) : ici, tout le reste.
+  const rows = vigilanceRows((today?.groups ?? []).filter((g) => g.phenomenon !== STORM));
+  const { red, orange } = groupCounts((today?.groups ?? []).filter((g) => g.phenomenon !== STORM));
+  const tomorrowGroups = (tomorrow?.groups ?? []).filter((g) => g.phenomenon !== STORM);
+  const tomorrowCounts = groupCounts(tomorrowGroups);
+  const tomorrowAlert = tomorrowCounts.orange + tomorrowCounts.red;
   const todaySeverity = asSeverity(red > 0 ? 4 : orange > 0 ? 3 : 0);
   const parts = [red > 0 ? `${plural(red, 'département')} en rouge` : '', orange > 0 ? `${plural(orange, 'département')} en orange` : ''].filter(Boolean);
-  const detail = tomorrow && tomorrowAlert > 0 ? `Demain : ${plural(tomorrowAlert, 'département')} en orange ou rouge (${[...new Set(tomorrow.groups.map((g) => PHENOMENA[g.phenomenon]?.toLowerCase()))].join(', ')})` : '';
+  const detail = tomorrowAlert > 0 ? `Demain : ${plural(tomorrowAlert, 'département')} en orange ou rouge (${[...new Set(tomorrowGroups.map((g) => PHENOMENA[g.phenomenon]?.toLowerCase()))].join(', ')})` : '';
   // Demain : une ligne de texte, sans clic (la couche montre le jour de l'horloge, pas le lendemain).
   if (detail) rows.push({ key: 'v-demain', title: detail });
   return {
@@ -297,9 +333,45 @@ function vigilanceRubric(data: NonNullable<ApiSynthese['vigilance']>): Rubric {
     title: 'Vigilance météo',
     severity: todaySeverity === 0 && detail ? 1 : todaySeverity,
     official: true,
-    summary: parts.join(', ') || 'Pas d’orange ni de rouge aujourd’hui',
+    summary: parts.join(', ') || 'Pas d’orange ni de rouge aujourd’hui (hors orages)',
     rows,
-    calm: 'Aucune vigilance orange ou rouge',
+    calm: 'Aucune vigilance orange ou rouge (hors orages)',
+  };
+}
+
+/**
+ * Orages. Il n'existe pas de source ouverte, sans clé et sans condition de réutilisation, qui donne les éclairs en points : la
+ * couche Foudre lit l'image d'EUMETSAT (nombre d'éclairs par case de 2 km, en pixels, côté navigateur) et Blitzortung est exclu.
+ * La rubrique repose donc sur la **vigilance orages** de Météo-France (orange et rouge, par département, aujourd'hui et demain),
+ * que le serveur a déjà ; le jaune, quotidien l'été, n'est qu'un « à noter ». Elle le dit, et renvoie à la couche Foudre pour voir les éclairs.
+ */
+function stormsRubric(data: NonNullable<ApiSynthese['vigilance']>): Rubric {
+  const { today, tomorrow } = currentAndNext(data);
+  const todayGroups = (today?.groups ?? []).filter((g) => g.phenomenon === STORM);
+  const rows = vigilanceRows(todayGroups);
+  const { orange, red } = groupCounts(todayGroups);
+  const tomorrowCounts = groupCounts((tomorrow?.groups ?? []).filter((g) => g.phenomenon === STORM));
+  const tomorrowAlert = tomorrowCounts.orange + tomorrowCounts.red;
+  const yellow = today?.stormYellow ?? 0;
+  if (tomorrowAlert > 0) rows.push({ key: 'o-demain', title: `Demain : ${plural(tomorrowAlert, 'département')} en orange ou rouge pour les orages` });
+  const severity = asSeverity(red > 0 ? 4 : orange > 0 ? 3 : yellow > 0 || tomorrowAlert > 0 ? 1 : 0);
+  const parts = [red > 0 ? `${plural(red, 'département')} en rouge` : '', orange > 0 ? `${plural(orange, 'département')} en orange` : ''].filter(Boolean);
+  const summary =
+    parts.length > 0
+      ? parts.join(', ')
+      : yellow > 0
+        ? `Vigilance jaune pour les orages : ${plural(yellow, 'département')}`
+        : 'Pas de vigilance orange ni rouge pour les orages aujourd’hui';
+  return {
+    id: 'orages',
+    icon: 'orages',
+    title: 'Orages',
+    severity,
+    official: true,
+    summary: `${summary}. D’après la vigilance Météo-France, pas un comptage d’éclairs.`,
+    rows,
+    calm: 'Orages : aucune vigilance orange ou rouge (les éclairs en direct sont sur la couche Foudre)',
+    more: { text: 'Voir les éclairs en direct (couche Foudre, image satellite)', action: { kind: 'view', moduleId: 'foudre', ...FRANCE } },
   };
 }
 
@@ -538,6 +610,7 @@ export function buildDigest(api: ApiSynthese, quakes: SynthesisQuake[] | null, n
     else unavailable.push(label);
   };
   add(api.vigilance, 'vigilance météo', vigilanceRubric);
+  add(api.vigilance, 'orages', stormsRubric);
   add(api.floods, 'crues', floodsRubric);
   add(api.rivers, 'rivières', riversRubric);
   add(api.fires, 'incendies', (data) => firesRubric(data, now));

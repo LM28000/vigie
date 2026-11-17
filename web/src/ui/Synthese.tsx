@@ -66,7 +66,7 @@ function useSynthesis(manager: ModuleManager) {
 }
 
 /** Ce que fait un clic : couche affichée, objet choisi (sa fiche s'ouvre), carte centrée ou cadrée. Toujours au direct : la synthèse parle d'aujourd'hui. */
-function run(manager: ModuleManager, action: Action, phone: boolean): void {
+export function runAction(manager: ModuleManager, action: Action, phone: boolean): void {
   if (!isLiveTime(clock.now())) clock.goLive();
   if (action.kind === 'object') {
     openObject(manager, action.moduleId, action.selection, { fallback: { lon: action.lon, lat: action.lat }, zoom: action.zoom, liveOnly: true });
@@ -86,7 +86,7 @@ function run(manager: ModuleManager, action: Action, phone: boolean): void {
 }
 
 /** Signe de gravité : une forme par cran (cercle creux, rond, triangle, losange), jamais la couleur seule. */
-function SeverityMark({ level }: { level: Severity }) {
+export function SeverityMark({ level }: { level: Severity }) {
   const stroke = 'var(--ui-ink)';
   const fill = level === 2 ? STATUS.jaune : level === 3 ? STATUS.orange : level === 4 ? STATUS.rouge : 'none';
   return (
@@ -102,7 +102,7 @@ function SeverityMark({ level }: { level: Severity }) {
   );
 }
 
-function Badge({ level, label }: { level: Severity; label: string }) {
+export function Badge({ level, label }: { level: Severity; label: string }) {
   return (
     <span className="today__badge" data-level={level}>
       <SeverityMark level={level} />
@@ -179,7 +179,7 @@ export function SyntheseView({ manager, phone, onPicked, onClose }: SyntheseView
   const digest = useMemo(() => (loaded ? buildDigest(loaded.api, loaded.quakes, now) : null), [loaded, now]);
 
   const pick = (action: Action) => {
-    run(manager, action, phone);
+    runAction(manager, action, phone);
     onPicked();
   };
 

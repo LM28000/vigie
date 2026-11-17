@@ -18,52 +18,25 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type Position = [lon: number, lat: number];
+import { circleRing, distanceM, ringAreaKm2, type Position } from './geo';
+
+export { distanceM, ringAreaKm2 };
+export type { Position };
 
 export type ZoneShape = { kind: 'circle'; center: Position; radius: number } | { kind: 'polygon'; points: Position[] };
 
 /** Surface maximale (km²), la même que `MAX_AREA_KM2` côté serveur : une grande région. */
 export const MAX_AREA_KM2 = 100_000;
 const CIRCLE_SEGMENTS = 96;
-const EARTH_RADIUS_M = 6_371_008.8;
 const MIN_RADIUS_M = 100;
 
 // ---------------------------------------------------------------------------------------------
 // Géométrie sur la sphère
 // ---------------------------------------------------------------------------------------------
 
-const rad = (degrees: number) => (degrees * Math.PI) / 180;
-const deg = (radians: number) => (radians * 180) / Math.PI;
-
-/** Distance à vol d'oiseau (mètres) entre deux positions : formule de haversine. */
-export function distanceM(a: Position, b: Position): number {
-  const h = Math.sin(rad(b[1] - a[1]) / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(rad(b[0] - a[0]) / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
-}
-
-/** Le point à `distance` mètres de `from`, dans la direction `bearing` (radians depuis le nord). */
-function destination(from: Position, distance: number, bearing: number): Position {
-  const angular = distance / EARTH_RADIUS_M;
-  const [lon, lat] = [rad(from[0]), rad(from[1])];
-  const lat2 = Math.asin(Math.sin(lat) * Math.cos(angular) + Math.cos(lat) * Math.sin(angular) * Math.cos(bearing));
-  const lon2 = lon + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(lat), Math.cos(angular) - Math.sin(lat) * Math.sin(lat2));
-  return [deg(lon2), deg(lat2)];
-}
-
 /** Les sommets (anneau ouvert) d'une zone : le polygone lui-même, ou le cercle approché. */
 export function shapeRing(shape: ZoneShape): Position[] {
-  if (shape.kind === 'polygon') return shape.points;
-  return Array.from({ length: CIRCLE_SEGMENTS }, (_, i) => destination(shape.center, shape.radius, (2 * Math.PI * i) / CIRCLE_SEGMENTS));
-}
-
-/** Surface (km²) d'un anneau sur la sphère (formule de Chamberlain-Duquette : somme de trapèzes en longitude). */
-export function ringAreaKm2(ring: Position[]): number {
-  let sum = 0;
-  for (let i = 0; i < ring.length; i++) {
-    const [a, b] = [ring[i]!, ring[(i + 1) % ring.length]!];
-    sum += rad(b[0] - a[0]) * (2 + Math.sin(rad(a[1])) + Math.sin(rad(b[1])));
-  }
-  return (Math.abs(sum) * EARTH_RADIUS_M ** 2) / 2 / 1e6;
+  return shape.kind === 'polygon' ? shape.points : circleRing(shape.center, shape.radius, CIRCLE_SEGMENTS);
 }
 
 export const shapeAreaKm2 = (shape: ZoneShape) => (shape.kind === 'circle' ? (Math.PI * shape.radius ** 2) / 1e6 : ringAreaKm2(shape.points));
@@ -212,6 +185,8 @@ export interface ZoneState {
   mode: DrawMode;
   /** Le dessin en cours (cercle en train d'être tiré, sommets déjà posés). */
   draft: ZoneShape | null;
+  /** Pour quoi on dessine : l'analyse de zone, ou une zone surveillée (`veille.ts`). */
+  purpose: 'analyse' | 'veille';
   /** La zone dessinée. */
   shape: ZoneShape | null;
   /** Le scrutin du panneau (identifiant côté site : `l24t2`…). */
@@ -224,7 +199,9 @@ export interface ZoneState {
 const DEFAULT_SCRUTIN = 'l24t2';
 
 class ZoneStore {
-  private state: ZoneState = { mode: 'off', draft: null, shape: null, scrutin: DEFAULT_SCRUTIN, analysis: { status: 'idle' }, panelOpen: true };
+  private state: ZoneState = { mode: 'off', draft: null, purpose: 'analyse', shape: null, scrutin: DEFAULT_SCRUTIN, analysis: { status: 'idle' }, panelOpen: true };
+  /** Qui attend la forme dessinée (la veille) ; `null` : l'analyse de zone. */
+  private sink: ((shape: ZoneShape) => void) | null = null;
   private listeners = new Set<() => void>();
   private abort: AbortController | undefined;
 
@@ -240,21 +217,48 @@ class ZoneStore {
     for (const listener of this.listeners) listener();
   }
 
-  /** Commence (ou arrête, si on y est déjà) le dessin d'un cercle ou d'un polygone. */
+  /** Commence (ou arrête, si on y est déjà) le dessin d'un cercle ou d'un polygone, pour l'analyse de zone. */
   startDrawing(mode: 'circle' | 'polygon'): void {
+    this.sink = null;
+    this.set({ mode, draft: null, purpose: 'analyse' });
+  }
+
+  /**
+   * Dessine une zone pour la veille (zones surveillées) : le même outil, mais la forme dessinée est remise à `onDone` au lieu
+   * d'ouvrir l'analyse. Annuler le dessin n'appelle rien.
+   */
+  drawFor(mode: 'circle' | 'polygon', onDone: (shape: ZoneShape) => void): void {
+    this.sink = onDone;
+    this.set({ mode, draft: null, purpose: 'veille' });
+  }
+
+  /** Change de forme en cours de dessin, sans changer de but (analyse ou veille). */
+  switchMode(mode: 'circle' | 'polygon'): void {
     this.set({ mode, draft: null });
   }
 
   cancelDrawing(): void {
-    this.set({ mode: 'off', draft: null });
+    this.sink = null;
+    this.set({ mode: 'off', draft: null, purpose: 'analyse' });
   }
 
   setDraft(draft: ZoneShape | null): void {
     this.set({ draft });
   }
 
-  /** La zone est dessinée : on la garde et on l'analyse. */
+  /** La zone est dessinée : pour la veille on la remet à qui l'a demandée, sinon on la garde et on l'analyse. */
   commit(shape: ZoneShape): void {
+    const sink = this.sink;
+    if (sink) {
+      this.sink = null;
+      this.set({ mode: 'off', draft: null, purpose: 'analyse' });
+      sink(shape);
+      return;
+    }
+    this.commitAnalysis(shape);
+  }
+
+  private commitAnalysis(shape: ZoneShape): void {
     this.set({ mode: 'off', draft: null, shape, panelOpen: true });
     void this.analyse();
   }
@@ -262,7 +266,7 @@ class ZoneStore {
   /** Applique une zone lue dans l'adresse. */
   restore(shape: ZoneShape, scrutin?: string): void {
     if (scrutin) this.state = { ...this.state, scrutin };
-    this.commit(shape);
+    this.commitAnalysis(shape);
   }
 
   clear(): void {
