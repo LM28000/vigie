@@ -38,6 +38,7 @@ import { setIsochroneOrigin } from './isochrones';
 import { HALO, KEY, selectionRing, zoomRamp } from './symbols';
 import { OVER_MAP } from '../map/parameters';
 import { orientation, type MeshData } from '../models/mesh';
+import { isReversal, vertexAngles } from './trainHeading';
 import { meshLayer, RENDER_SETTING, wants3d } from '../models/meshLayer';
 import { CAR_SIZE, carMesh, HAS_CAB, type CarType } from '../models/trains';
 
@@ -271,11 +272,6 @@ const CATEGORY_NAMES: Record<string, string> = {
 };
 
 // --- Géométrie ---
-
-/** Cap d'un tronçon tel qu'il apparaît sur la carte (Web Mercator), en degrés deck.gl. */
-function heading(lon1: number, my1: number, lon2: number, my2: number): number {
-  return Math.atan2(my2 - my1, (lon2 - lon1) * DEG) / DEG;
-}
 
 // --- Chargement ---
 
@@ -680,15 +676,8 @@ function computeGeometry(
   const count = lon.length;
   const my = Float64Array.from(myList);
   const lonArray = Float64Array.from(lon);
-  // Cap de chaque sommet : celui du premier tronçon de longueur non nulle qui en part.
-  const angles = new Float32Array(count);
-  let nextAngle = 0;
-  for (let k = count - 1; k >= 0; k--) {
-    if (k + 1 < count && (lonArray[k + 1] !== lonArray[k] || my[k + 1] !== my[k])) {
-      nextAngle = heading(lonArray[k]!, my[k]!, lonArray[k + 1]!, my[k + 1]!);
-    }
-    angles[k] = nextAngle;
-  }
+  // Cap de chaque sommet : sens de marche, ou arrivée pour un train à l'arrêt (voir `vertexAngles`).
+  const angles = vertexAngles(lonArray, my);
 
   return {
     onTracks: totalLength > 0 ? realLength / totalLength : 0,
@@ -971,12 +960,20 @@ function collectBody(train: Train, head: Head, needM: number, metersPerUnit: num
   let z = head.position[2];
   pushBody(x, y, lat, z, 0);
   let d = 0;
+  // Sens de marche local : celui de la tête, puis celui du dernier pas fait vers l'arrière.
+  let forwardX = Math.cos(head.angle * DEG);
+  let forwardY = Math.sin(head.angle * DEG);
   // Le sommet k est derrière la tête, sauf si elle est exactement dessus.
   for (let i = f > 0 ? k : k - 1; i >= 0 && d < needM; i--) {
     const vx = train.lon[i]! * DEG;
     const vy = train.my[i]!;
     const length = Math.hypot(vx - x, vy - y) * metersPerUnit;
     if (length < 1e-3) continue;
+    // Demi-tour dans le passé (terminus en cul-de-sac) : la rame ne se replie pas sur sa propre voie,
+    // elle part en ligne droite derrière la tête, comme au départ d'un terminus.
+    if (isReversal(x - vx, y - vy, forwardX, forwardY)) break;
+    forwardX = x - vx;
+    forwardY = y - vy;
     d += length;
     x = vx;
     y = vy;
@@ -986,10 +983,10 @@ function collectBody(train: Train, head: Head, needM: number, metersPerUnit: num
   }
   if (d < needM) {
     // Fin du chemin connu : prolongement droit, à l'opposé du sens de marche.
-    const angle = train.angles[0]! * DEG;
+    const norm = Math.hypot(forwardX, forwardY) || 1;
     const units = (needM - d) / metersPerUnit;
-    const ex = x - Math.cos(angle) * units;
-    const ey = y - Math.sin(angle) * units;
+    const ex = x - (forwardX / norm) * units;
+    const ey = y - (forwardY / norm) * units;
     pushBody(ex, ey, lat + ((ey - y) * Math.cos(lat * DEG)) / DEG, z, needM);
   }
 }
