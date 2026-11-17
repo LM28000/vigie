@@ -73,6 +73,17 @@ La première suffit : les quatre rendus se décrivent comme des matrices de coul
 
 **Mesures** : voir [Performances](#performances).
 
+## Vue photoréaliste
+
+Réglage facultatif (module `photoreal`) : les Google Photorealistic 3D Tiles, servis par Cesium ion (actif 2275207) et dessinés par un `Tile3DLayer` de deck.gl, remplacent les bâtiments extrudés et leurs ombres. Il demande `CESIUM_ION_TOKEN` côté serveur (voir [déploiement](deploiement.md)).
+
+- **Altitude.** Les tuiles comptent au-dessus de l'ellipsoïde WGS84, le reste de la carte au-dessus du niveau de la mer : l'origine de chaque tuile est abaissée de l'ondulation du géoïde (`web/src/map/geoid.ts`, 43 à 57 m en France). `MESH_LIFT_M` (`photorealLayer.ts`, 0) permet un dernier décalage vertical.
+- **Le maillage recouvre le fond.** Le relief de MapLibre, plus lisse que le maillage, en perçait des plaques claires (pentes des Alpes, baie du Mont-Saint-Michel) ; relever le maillage n'y change rien sans enterrer les objets posés. Une couche (`DepthClearLayer`) vide donc le tampon de profondeur juste avant le maillage : là où il est chargé, il masque toujours le fond ; ailleurs, le fond reste visible. Les couches dessinées ensuite (avions, trains, bus…) ne se testent plus que contre le maillage. Inconvénient : derrière une crête sans maillage chargé, un véhicule n'est plus caché par le relief.
+- **Mesures** (Chrome sans fenêtre, Mac Apple Silicon, 1280 × 800, rendu logiciel) : 57 à 61 images/s à zoom 16 en ville, 28 images/s à zoom 18 dans une rue de Paris ; téléphone (390 × 844) 60 images/s à zoom 16.
+- **Lumière.** Les photos sont déjà éclairées : affichage à plat, sans rééclairage ; la nuit est un simple assombrissement.
+- **Décodeur Draco** servi par le site (`web/public/draco/`, copié de `@loaders.gl/draco`) : aucune requête vers gstatic.com ou un CDN. À recopier si `@loaders.gl` change de version majeure.
+- **Droits d'auteur.** Les mentions lues dans le glTF de chaque tuile sont affichées.
+
 ## Pièges connus
 
 - **MapLibre est volontairement en version 5.** deck.gl 9.4 utilise des éléments internes de MapLibre que la version 6 a renommés : la carte plante dès que le relief 3D est actif. Il faudra repasser en v6 quand deck.gl la prendra en charge.

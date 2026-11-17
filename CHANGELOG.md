@@ -7,6 +7,10 @@ Historique du projet, regroupé par phase et par date, reconstruit à partir de 
 - **Panneau « Aujourd'hui en France »** : ce qui compte en ce moment (vigilances météo, crues, rivières, feux, brouillage GPS, avions, air, trains en retard, séismes), en rubriques ; chaque ligne mène à la couche et à l'objet concerné sur la carte. Bouton parmi les puces de couches, feuille sur téléphone, lien partageable (`synthese=1`), Échap pour fermer. Une source muette est dite « indisponible », jamais « calme ».
 - **Serveur** : `GET /api/synthese` (`server/src/synthese.rs`) résume les réponses déjà en mémoire, **aucune requête externe**, réponse gardée 30 s. Le contenu ne se charge qu'à l'ouverture du panneau.
 
+## 17 novembre 2026 — Vue photoréaliste
+
+- **Vue photoréaliste** (réglage facultatif) : Google Photorealistic 3D Tiles via Cesium ion, `Tile3DLayer` deck.gl, altitudes ramenées au niveau de la mer par le géoïde, maillage toujours devant le fond de carte (tampon de profondeur vidé), affichage à plat, nuit par assombrissement. Jeton `CESIUM_ION_TOKEN` gardé sur le serveur (`GET /api/photoreal/endpoint`). Décodeur Draco hébergé par le site ([docs/rendu-3d.md](docs/rendu-3d.md#vue-photoréaliste)).
+
 ## 16 novembre 2026 — Satellite du jour
 
 - **Satellite du jour** (Ciel et espace) : la France vue par NOAA-20 (défaut), NOAA-21, Terra ou Aqua, d'après NASA GIBS (tuiles WMTS sans clé, CORS ouvert : client seulement), en vraies couleurs ou « neige et feux » (fausses couleurs). Date liée à la frise du temps (jour UTC) ; pour aujourd'hui, repli sur la veille tant que la mosaïque ne couvre pas la France. Surzoom au-delà du niveau 9, drapé sur le relief, sous bâtiments et noms, bandeau et fiche avec date et satellite ([docs/couches.md](docs/couches.md#satellite-du-jour--source-et-choix)).

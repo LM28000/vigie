@@ -39,6 +39,8 @@ services:
       IDFM_MODES: "${IDFM_MODES:-}"
       IDFM_INTERVALLE_S: "${IDFM_INTERVALLE_S:-}"
       IDFM_MEMOIRE_MO: "${IDFM_MEMOIRE_MO:-}"
+      # Vide = vue photoréaliste (Cesium ion) indisponible. Jeton Cesium ion : il ne sort jamais du serveur.
+      CESIUM_ION_TOKEN: "${CESIUM_ION_TOKEN:-}"
     volumes:
       - "${DATA_PATH:-./data}:/data"
       - "${ARCHIVE_PATH:-./archive}:/archive"

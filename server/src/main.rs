@@ -11,6 +11,7 @@
 //! - relève le niveau de la mer aux marégraphes du Shom (REFMAR) toutes les 10 minutes ;
 //! - estime la position des bus, trams et métros des réseaux qui ne publient que leurs horaires en temps réel ;
 //! - convertit le MNT du LiDAR HD de l'IGN en tuiles d'altitude pour le relief 3D (`/api/relief-lidar`) ;
+//! - donne au site l'adresse des Google Photorealistic 3D Tiles (Cesium ion, `/api/photoreal/endpoint`), sans lui montrer le jeton ;
 //! - sert l'API `/api/trains` au site.
 //!
 //! Réglages par variables d'environnement :
@@ -25,6 +26,7 @@
 //! - `TUILES_EFFACER_SOURCES` (aucune) : si définie, la source d'un jeu de tuiles est effacée après sa fabrication ;
 //! - `TUILES_JEUX` (tous) : liste des jeux de tuiles à mettre en service, séparés par des virgules (ex. « population ») ;
 //! - `INSEE_CARREAUX_URL` (millésime 2019 de l'INSEE) : adresse du zip des carreaux de population ;
+//! - `CESIUM_ION_TOKEN` (aucun) : jeton Cesium ion de la vue photoréaliste ; sans lui, le réglage est indisponible ;
 //! - `ATMO_USERNAME` et `ATMO_PASSWORD` (aucun) : compte Atmo Data pour la qualité de l'air ; sans eux, la couche est désactivée.
 
 mod accidents;
@@ -46,6 +48,7 @@ mod webcams;
 mod multimodal;
 mod network;
 mod parkings;
+mod photoreal;
 mod jamming;
 mod planes;
 mod raptor;
@@ -160,7 +163,8 @@ async fn main() -> Result<()> {
     info!("serveur prêt sur http://{address}");
     let app = api::router(state, config.web_dir.as_deref())
         .merge(history::router(history))
-        .merge(relief_lidar::router(http.clone(), config.data_dir.clone()));
+        .merge(relief_lidar::router(http.clone(), config.data_dir.clone()))
+        .merge(photoreal::router(http.clone()));
     axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await?;
     Ok(())
 }

@@ -25,6 +25,7 @@ import { lightning } from './lightning';
 import { lidar } from './lidar';
 import { monuments } from './monuments';
 import { parkings } from './parkings';
+import { photoreal } from './photoreal';
 import { planes } from './planes';
 import { population } from './population';
 import { power } from './power';
@@ -46,5 +47,5 @@ export const MODULES: LayerModule[] = [
   floods, rivers, tides, weatherAlerts, air, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections,
   dayNight, buildingShadows, satellites, jamming, rain, lightning, satelliteImagery, wind,
-  aerialPhotos, lidar, cameras, monuments, accidents,
+  aerialPhotos, lidar, photoreal, cameras, monuments, accidents,
 ];

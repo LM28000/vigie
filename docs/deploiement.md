@@ -89,6 +89,7 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `TRANSPORTS_ESTIMES` | actif | `non` désactive les positions estimées d'après les horaires. |
+| `CESIUM_ION_TOKEN` | aucun | Jeton Cesium ion de la vue photoréaliste ; sans lui, le réglage est indisponible. Le navigateur ne le voit jamais : il demande `GET /api/photoreal/endpoint`, le serveur interroge Cesium ion et ne transmet qu'une adresse de tuiles à durée limitée. |
 | `TRANSPORTS_DECALAGE_S` | `0` | Décale l'horloge (test hors du direct ; le temps réel est alors ignoré). |
 
 ### Isochrones

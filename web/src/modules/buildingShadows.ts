@@ -26,7 +26,7 @@ import { MercatorCoordinate } from 'maplibre-gl';
 import type { CanvasSource, Map as MapLibreMap } from 'maplibre-gl';
 import { clock } from '../core/clock';
 import { defineModule } from '../core/module';
-import { firstSymbolLayerId } from '../map/baseMap';
+import { firstSymbolLayerId, isPhotorealShown } from '../map/baseMap';
 import { sunPosition } from './solar';
 
 const SOURCE_ID = 'ombres-batiments';
@@ -366,7 +366,8 @@ function refresh(map: MapLibreMap, time: number, { force = false }: { force?: bo
   const center = map.getCenter();
   const { elevation, azimuth } = sunPosition(center.lat, center.lng, time);
   lastElevation = elevation;
-  const visible = map.getZoom() >= MIN_ZOOM && elevation > 0;
+  // Le maillage photoréaliste remplace les bâtiments : leurs ombres n'ont plus rien à qui s'accrocher.
+  const visible = map.getZoom() >= MIN_ZOOM && elevation > 0 && !isPhotorealShown();
   if (visible !== lastVisible) {
     lastVisible = visible;
     map.setLayoutProperty(LAYER_ID, 'visibility', visible ? 'visible' : 'none');

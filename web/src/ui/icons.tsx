@@ -45,6 +45,7 @@ const PATHS: Record<string, string> = {
   'ombres-batiments': 'M5 20V8l5-3v15M10 9h5l4 3v8M5 20h14M7.5 11h.01M7.5 14h.01M7.5 17h.01',
   satellites: 'm8 8 4 4M10 5l4 4-5 5-4-4ZM15 10l4 4-5 5-4-4ZM5 19l2-2M19 5l-2 2',
   photos: 'M4 8h3l1.5-2h7L17 8h3v11H4ZM12 11a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z',
+  photoreal: 'm12 3 8 4.5v9L12 21l-8-4.5v-9ZM4 7.5l8 4.5 8-4.5M12 12v9',
   monuments: 'M3 20h18M5 20V11M9.5 20V11M14.5 20V11M19 20V11M3 11l9-6.5 9 6.5Z',
   cameras: 'M4 8.5h11a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16v-6A1.5 1.5 0 0 1 4 8.5ZM16.5 11.5l5-2.5v8l-5-2.5',
   accidents: 'M8 21 10 3M16 21l-2-18M12 5v2.5M12 10.5v3M12 16.5V19',

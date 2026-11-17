@@ -74,7 +74,28 @@ export const isTerrainSource = (id: string | undefined): boolean => id === TERRA
 
 /** Le réglage du relief 3D (source et exagération) à donner à `map.setTerrain`. L'exagération est la même pour les deux sources : pas de saut au passage de l'une à l'autre. */
 export function terrainOptions(): { source: string; exaggeration: number } {
-  return { source: lidarTerrain ? LIDAR_TERRAIN_SOURCE : TERRAIN_SOURCE, exaggeration: TERRAIN_EXAGGERATION };
+  return { source: lidarTerrain ? LIDAR_TERRAIN_SOURCE : TERRAIN_SOURCE, exaggeration: photorealShown ? 1 : TERRAIN_EXAGGERATION };
+}
+
+/**
+ * Vue photoréaliste affichée (module « Vue photoréaliste ») : le maillage de Google remplace les bâtiments du fond, et le
+ * relief repasse à l'échelle 1, la seule où le sol du maillage et celui de MapLibre (donc les avions, les trains et le reste,
+ * posés sur celui-ci) se confondent. Voir docs/rendu-3d.md.
+ */
+let photorealShown = false;
+
+export const isPhotorealShown = (): boolean => photorealShown;
+
+const FLAT_BUILDING_LAYERS = ['building', 'building-3d'];
+
+/** Renvoie vrai si l'état a changé (les ombres des bâtiments sont alors à redessiner : elles se retirent avec eux). */
+export function setPhotorealShown(map: MapLibreMap, on: boolean): boolean {
+  if (photorealShown === on) return false;
+  photorealShown = on;
+  for (const id of FLAT_BUILDING_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'none' : 'visible');
+  // L'exagération n'est changée que si le relief est affiché : l'éteindre est un choix de l'utilisateur.
+  if (map.getTerrain() && map.getProjection()?.type !== 'globe') map.setTerrain(terrainOptions());
+  return true;
 }
 
 /** Ajoute (si besoin) les deux sources du relief LiDAR, et la couche d'ombrage qui lui correspond. */
