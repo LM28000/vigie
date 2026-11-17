@@ -2,6 +2,12 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 17 novembre 2026 — Trains : même sens à tous les zooms
+
+- **Trains à l'arrêt tournés à l'envers selon le zoom** : le cap de l'icône (sous le zoom 13) était celui du tronçon *suivant* l'arrêt, alors que la rame dessinée voiture par voiture (zoom 13 et plus, à plat ou en 3D) s'étend derrière son *arrivée*. Pour un train qui repart en sens inverse (terminus, rebroussement) la tête de l'icône pointait donc à l'opposé du nez de la rame. Mesure sur le relevé du 16 novembre (05 h 30, 09 h, 17 h UTC) : 5, 5 et 12 trains à l'arrêt à 180° d'écart, plus aucun après correction ; en marche, aucun écart (500 trains sur 509 à moins de 25° du déplacement réel, les 9 autres sont des courbes).
+- **Un seul cap pour toutes les représentations** (`web/src/modules/trainHeading.ts`) : en marche, celui du tronçon parcouru ; à l'arrêt, celui de l'arrivée (la rame reste comme elle est arrivée). Au départ d'un rebroussement, la rame ne se replie plus sur sa propre voie : elle part en ligne droite derrière la tête, comme au départ d'un terminus.
+- **Test** : `node --test web/scripts/trainHeading.test.mjs` (Node 22.18 ou plus).
+
 ## 17 novembre 2026 — Synthèse « Aujourd'hui en France »
 
 - **Panneau « Aujourd'hui en France »** : ce qui compte en ce moment (vigilances météo, crues, rivières, feux, brouillage GPS, avions, air, trains en retard, séismes), en rubriques ; chaque ligne mène à la couche et à l'objet concerné sur la carte. Bouton parmi les puces de couches, feuille sur téléphone, lien partageable (`synthese=1`), Échap pour fermer. Une source muette est dite « indisponible », jamais « calme ».
