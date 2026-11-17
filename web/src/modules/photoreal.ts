@@ -20,7 +20,7 @@ import { defineModule, type LegendItem, type LoadContext, type RenderContext } f
 import { ModuleManager } from '../core/moduleManager';
 import { setPhotorealShown } from '../map/baseMap';
 import './photoreal.css';
-import { SeaLevelScenegraphLayer, Tile3DLayer, tileCopyright } from './photorealLayer';
+import { DepthClearLayer, SeaLevelScenegraphLayer, Tile3DLayer, tileCopyright } from './photorealLayer';
 
 /** Décodeur Draco servi par le site (public/draco/) : loaders.gl irait sinon le chercher chez gstatic.com. */
 const DRACO_MODULES = { 'draco_wasm_wrapper.js': '/draco/draco_wasm_wrapper.js', 'draco_decoder.wasm': '/draco/draco_decoder.wasm' };
@@ -234,7 +234,7 @@ export const photoreal = defineModule<PhotorealData>({
     if (ctx.view.zoom < minZoom) return `Approchez-vous (zoom ${minZoom} ou plus) pour voir le maillage 3D de Google`;
     const inView = statCount('Tiles In View');
     const mb = Math.round(statCount('Tile Memory Use') / (1024 * 1024));
-    return inView > 0 ? `${inView} tuiles à l’écran · ${mb} Mo de maillages en mémoire` : 'Chargement du maillage 3D de Google…';
+    return inView > 0 ? `Maillage : ${inView} tuiles à l’écran · ${mb} Mo de maillages en mémoire` : 'Chargement du maillage 3D de Google…';
   },
 
   deckLayers(ctx) {
@@ -242,6 +242,7 @@ export const photoreal = defineModule<PhotorealData>({
     const detail = detailOf(ctx.settings);
     const options = DETAIL[detail]!;
     return [
+      new DepthClearLayer({ id: `${LAYER_PREFIX}/profondeur`, data: [0] }),
       new Tile3DLayer({
         // Un autre niveau de détail demande un autre jeu de tuiles (la tolérance est lue au chargement) : autre identifiant.
         id: `${LAYER_PREFIX}/tuiles-${detail}`,

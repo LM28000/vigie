@@ -4,7 +4,7 @@ Historique du projet, regroupé par phase et par date, reconstruit à partir de 
 
 ## 17 novembre 2026 — Vue photoréaliste
 
-- **Vue photoréaliste** (réglage facultatif) : Google Photorealistic 3D Tiles via Cesium ion, `Tile3DLayer` deck.gl, altitudes ramenées au niveau de la mer par le géoïde, affichage à plat, nuit par assombrissement. Jeton `CESIUM_ION_TOKEN` gardé sur le serveur (`GET /api/photoreal/endpoint`). Décodeur Draco hébergé par le site ([docs/rendu-3d.md](docs/rendu-3d.md#vue-photoréaliste)).
+- **Vue photoréaliste** (réglage facultatif) : Google Photorealistic 3D Tiles via Cesium ion, `Tile3DLayer` deck.gl, altitudes ramenées au niveau de la mer par le géoïde, maillage toujours devant le fond de carte (tampon de profondeur vidé), affichage à plat, nuit par assombrissement. Jeton `CESIUM_ION_TOKEN` gardé sur le serveur (`GET /api/photoreal/endpoint`). Décodeur Draco hébergé par le site ([docs/rendu-3d.md](docs/rendu-3d.md#vue-photoréaliste)).
 
 ## 16 novembre 2026 — Bus d'Île-de-France activés
 

@@ -9,15 +9,35 @@
  *    telles quelles (`_lighting: 'flat'`, texture × couleur), sans rééclairer. La couleur sert à assombrir la nuit.
  * 3. **Couleur.** `getColor` vient du module (la nuit), voir `photoreal.ts`.
  */
+import { Layer } from '@deck.gl/core';
 import { Tile3DLayer } from '@deck.gl/geo-layers';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import { geoidUndulation } from '../map/geoid';
+
+/**
+ * Vide le tampon de profondeur avant le maillage. Le fond de carte (relief compris) a déjà été dessiné, et son relief, plus
+ * lisse que le maillage, en perçait des plaques (pentes, baie du Mont-Saint-Michel). Sans lui dans le tampon, le maillage
+ * recouvre toujours le fond là où il est chargé, et le fond reste visible ailleurs ; les couches dessinées ensuite (avions,
+ * trains, bus…) ne se testent plus que contre le maillage.
+ */
+export class DepthClearLayer extends Layer {
+  static override layerName = 'DepthClearLayer';
+
+  initializeState(): void {}
+
+  override draw(): void {
+    const gl = (this.context.device as unknown as { gl?: WebGL2RenderingContext }).gl;
+    if (!gl) return;
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+  }
+}
 
 /** Marque une couche dont l'origine a déjà été ramenée au niveau de la mer (un `clone` repasse par le constructeur). */
 const SEA_LEVEL = 'photorealSeaLevel';
 
 /** Décalage vertical du maillage par rapport au relief de MapLibre, en mètres (positif : vers le haut). Voir docs/rendu-3d.md. */
-export const MESH_LIFT_M = 4;
+export const MESH_LIFT_M = 0;
 
 export class SeaLevelScenegraphLayer extends ScenegraphLayer<number> {
   static override layerName = 'SeaLevelScenegraphLayer';
