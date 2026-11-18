@@ -29,17 +29,31 @@
   "webManifestUrl": "http://localhost:4317/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
-  "alphaDependencies": { "enabled": false },
+  "alphaDependencies": {
+    "enabled": false
+  },
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "fullScopeUrl": "https://vigie.du-cray.eu/",
   "minSdkVersion": 24,
-  "fingerprints": [],
+  "fingerprints": [
+    {
+      "name": "Google Play (signature de l'app)",
+      "value": "3A:42:12:CF:D8:58:2D:6B:D1:6A:2E:1E:48:92:25:08:AD:F3:D9:B2:E3:8F:F7:36:CC:F1:41:7E:09:BB:1E:B2"
+    },
+    {
+      "name": "Clé d'envoi",
+      "value": "F9:3F:37:1D:6F:54:F0:49:B9:7D:27:24:0F:3C:B7:76:5E:BE:30:5B:AD:08:E3:AE:2A:42:4F:DE:71:49:0F:B0"
+    }
+  ],
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "protocolHandlers": [],
   "fileHandlers": [],
   "launchHandlerClientMode": "",
-  "displayOverride": ["standalone", "minimal-ui"]
+  "displayOverride": [
+    "standalone",
+    "minimal-ui"
+  ]
 }
