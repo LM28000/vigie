@@ -49,6 +49,7 @@ export const neigeProvider: Provider = {
         subtitle: `Massif · ${m.mountain} · ${m.dep}`,
         live: risk > 0 ? `risque ${risk}/5 ${WORD[risk]}` : undefined,
         liveTone: risk >= 4 ? 'alert' : undefined,
+        at: m,
         score,
         run: () => openObject(ctx.manager, MODULE, { id: m.id }, { fallback: m, zoom: 9 }),
       };

@@ -34,6 +34,7 @@ export const bikesProvider: Provider = {
       title: station.name || 'Station',
       subtitle: station.network,
       live: station.renting ? `${station.bikes} vélo${station.bikes > 1 ? 's' : ''} · ${station.docks} place${station.docks > 1 ? 's' : ''}` : 'hors service',
+      at: station,
       score,
       run: () => openObject(ctx.manager, MODULE, { key: station.key }, { fallback: station, zoom: 16 }),
     }));

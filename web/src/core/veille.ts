@@ -13,16 +13,19 @@
  * - **Relevé** : toutes les minutes tant qu'il y a une zone (même onglet masqué : les navigateurs ralentissent alors les minuteries
  *   à une par minute, ce qui suffit), et tout de suite quand les zones changent.
  *
- * # Notifications : le site est servi en HTTP
+ * # Notifications : HTTP sur le réseau local, HTTPS sur Internet
  *
- * Sur le réseau de la maison le site est en HTTP : l'API `Notification` et le Web Push n'y existent pas (contexte non sécurisé).
- * Les alertes sont donc **dans l'application** (avis discret, liste, pastille du bouton, compteur dans le titre de l'onglet, son
- * désactivé par défaut). `Notification` n'est utilisée que si `window.isSecureContext` : le jour où le site passera en HTTPS, un
- * bouton propose la permission, sans autre changement.
+ * Sur le réseau de la maison le site peut être servi en HTTP : l'API `Notification` n'y existe pas (contexte non sécurisé). Les
+ * alertes sont toujours **dans l'application** (avis discret, liste, pastille du bouton, compteur dans le titre de l'onglet, son
+ * désactivé par défaut). `Notification` n'est utilisée que si `window.isSecureContext` (le site en HTTPS) : une case à cocher
+ * du panneau demande alors la permission (jamais au chargement), et la notification n'est émise que si l'onglet est masqué.
+ * Limites : l'onglet doit rester ouvert (pas de Web Push, donc rien quand le navigateur est fermé), et certains navigateurs
+ * mobiles refusent le constructeur `Notification` (les alertes restent alors dans l'application).
  */
 import { useSyncExternalStore } from 'react';
 import { circleRing, distanceToRingM, inRing, ringBounds, simplifyRing, type Bounds, type Position } from './geo';
 import type { ModuleManager } from './moduleManager';
+import { aroundMeRef } from './positionLogic';
 import { fetchQuakes } from './syntheseData';
 import { departmentAt, departmentByCode } from './syntheseModel';
 import {
@@ -133,6 +136,16 @@ function buildZone(ref: ZoneRef, name: string, ring: readonly Position[], extraD
 export function zoneFromCircle(center: Position, radius: number, name?: string, types?: EventType[]): VeilleZone {
   const ref: ZoneRef = { kind: 'circle', lon: round5(center[0]), lat: round5(center[1]), radius: Math.round(radius) };
   return buildZone(ref, name ?? defaultName(ref), circleRing(center, radius, 64), [], types);
+}
+
+/**
+ * « Surveiller autour de moi » : un cercle de `radiusKm` km autour de la position **arrondie à environ 1 km** (`aroundMeRef`).
+ * C'est la seule forme de la position qui quitte l'appareil : la zone est envoyée au serveur comme toute zone (en anneau), et
+ * s'écrit dans l'adresse de partage ; la position exacte, elle, n'est jamais gardée.
+ */
+export function zoneAroundMe(lon: number, lat: number, radiusKm: number): VeilleZone {
+  const ref = aroundMeRef(lon, lat, radiusKm);
+  return zoneFromCircle([ref.lon, ref.lat], ref.radius, `Autour de moi (${radiusKm} km)`);
 }
 
 export function zoneFromPolygon(points: readonly Position[], name?: string, types?: EventType[]): VeilleZone {
@@ -422,15 +435,24 @@ class VeilleStore {
     if (sound) this.beep(); // un essai : la personne entend ce qu'elle active (et le navigateur autorise le son après ce geste)
   }
 
-  /** Propose la permission de `Notification` : sans effet hors contexte sûr (HTTP). */
-  async setNotify(notify: boolean): Promise<void> {
-    if (notify && !NOTIFICATIONS_POSSIBLE()) return;
+  /**
+   * Propose la permission de `Notification` : sans effet hors contexte sûr (HTTP). À appeler depuis un geste (la case à cocher) :
+   * jamais de demande au chargement. Dit pourquoi quand ça n'a pas pu être activé (`'refusee'` : permission refusée, qu'on ne
+   * peut rouvrir que dans les réglages du navigateur).
+   */
+  async setNotify(notify: boolean): Promise<'ok' | 'indisponible' | 'refusee'> {
+    if (notify && !NOTIFICATIONS_POSSIBLE()) return 'indisponible';
+    const wanted = notify;
     if (notify && Notification.permission === 'default') {
-      const result = await Notification.requestPermission();
-      if (result !== 'granted') notify = false;
+      try {
+        if ((await Notification.requestPermission()) !== 'granted') notify = false;
+      } catch {
+        notify = false;
+      }
     } else if (notify && Notification.permission !== 'granted') notify = false;
     this.set({ prefs: { ...this.state.prefs, notify } });
     save(STORAGE.prefs, this.state.prefs);
+    return wanted && !notify ? 'refusee' : 'ok';
   }
 
   notificationsAvailable(): boolean {

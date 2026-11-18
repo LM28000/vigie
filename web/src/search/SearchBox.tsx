@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ModuleManager } from '../core/moduleManager';
+import { originOf, usePosition } from '../core/position';
 import { useModuleStates } from '../ui/hooks';
 import { dataOf } from './access';
 import { isLiveWord, parseWhen } from './dates';
@@ -166,8 +167,11 @@ export function SearchBox({ manager }: { manager: ModuleManager }) {
     return [...local, ...places, ...extra];
   }, [local, places, manager, query]);
 
-  const groups = useMemo(() => arrange(all, filter), [all, filter]);
-  const kindsPresent = useMemo(() => arrange(all, null).map((g) => g.kind), [all]);
+  // Position connue (la personne s'est localisée) : les résultats proches gagnent un peu de rang. Sans position : aucun effet.
+  const here = usePosition();
+  const origin = useMemo(() => originOf(here), [here]);
+  const groups = useMemo(() => arrange(all, filter, origin), [all, filter, origin]);
+  const kindsPresent = useMemo(() => arrange(all, null, origin).map((g) => g.kind), [all, origin]);
 
   // Avant la frappe : les recherches récentes, proposées comme des résultats.
   const recentRows = useMemo<SearchResult[]>(

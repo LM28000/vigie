@@ -2,6 +2,14 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Autour de moi : position, recherche et Veille
+
+- **Position** (`web/src/core/position.ts`, `positionLogic.ts`) : `navigator.geolocation` seulement en contexte sûr et sur clic ; dernière position en mémoire seule (périmée après 30 min pour le classement), drapeau « déjà accepté » en `localStorage` sans coordonnées ; refus, indisponible et délai dépassé en messages français ; `watchPosition` seulement quand le suivi est coché, coupé à la fermeture du panneau. Rien n'est envoyé, journalisé ni écrit dans l'adresse (la carte se centre sur la position arrondie à environ 1 km).
+- **Bouton et panneau « Autour de moi »** (`web/src/ui/Position.tsx`) : point « vous êtes ici » avec cercle de précision (surcouche deck.gl), gare la plus proche et prochains départs, vélos, bornes et carburant le moins cher à moins de 10 km ; données déjà chargées, sinon bouton « Charger » (`ModuleManager.prefetch`) ; lignes ouvrant l'objet (`openObject`) ; clavier, Échap, téléphone en feuille du bas.
+- **Recherche** : bonus de proximité (30 au plus, nul au-delà de 150 km) pour les résultats qui ont une place (`SearchResult.at`), seulement si une position fraîche est connue.
+- **Veille** : « Surveiller autour de moi » (10, 25 ou 50 km, centre arrondi à environ 1 km) dans le panneau et dans « Ajouter une zone ». Notifications du navigateur vérifiées en HTTPS : permission demandée au clic, message si elle est refusée.
+- **Tests** : `web/scripts/position.test.mjs`.
+
 ## 18 novembre 2026 — Neige : hauteurs relevées avec l'API Observation seule
 
 - **Problème** : la clé Météo-France est abonnée à « Données Publiques Observation » en v2, pas au « Paquet Observation » ; le serveur appelait `DPObs/v1` et `DPPaquetObs` et recevait `403`, donc aucune hauteur de neige.

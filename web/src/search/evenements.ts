@@ -62,6 +62,7 @@ export const evenementsProvider: Provider = {
         title: e.title,
         subtitle: [CATEGORIES[e.cat]!.short, e.commune].filter(Boolean).join(' · '),
         live: start > ctx.time && start - ctx.time < 24 * 3_600_000 ? formatTime(start) : start && start <= ctx.time ? 'en cours' : undefined,
+        at: e,
         score,
         run: () => openObject(ctx.manager, MODULE, { id: e.id }, { fallback: e, zoom: 15 }),
       };

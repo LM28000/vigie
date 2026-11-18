@@ -38,6 +38,7 @@ export const monumentsProvider: Provider = {
       title: m.name || m.denomination || 'Monument',
       subtitle: [m.denomination && m.denomination !== m.name ? m.denomination : undefined, m.commune].filter(Boolean).join(' · '),
       live: m.prot === 1 || m.prot === 3 ? 'classé' : 'inscrit',
+      at: m,
       score,
       run: () => openObject(ctx.manager, MODULE, { ref: m.ref }, { fallback: m, zoom: 16 }),
     }));

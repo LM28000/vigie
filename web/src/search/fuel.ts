@@ -128,6 +128,7 @@ export const fuelProvider: Provider = {
       title: station.city || 'Station-service',
       subtitle: [fq.generic ? `${label(fuelId)} (essence)` : label(fuelId), station.address, origin ? kmText(distance) : undefined].filter(Boolean).join(' · '),
       live: euros(price),
+      at: station,
       // Le moins cher en tête, puis dans l'ordre : le groupe passe devant les couches quand on a nommé un carburant.
       score: (fq.fuel ? 400 : 330) - i * 2,
       run: () => {

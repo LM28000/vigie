@@ -2639,6 +2639,105 @@ p {
   }
 }
 
+/* --- Autour de moi (ui/Position.tsx) : bouton des commandes, panneau (même place que l'analyse de zone), point sur la carte --- */
+
+.maplibregl-ctrl-position button {
+  display: grid;
+  place-items: center;
+  color: var(--ui-ink);
+}
+
+.maplibregl-ctrl-position button.is-active {
+  color: #1a73e8;
+}
+
+.position-panel:focus {
+  outline: none;
+}
+
+/* Un bouton de plus dans la colonne des commandes : le panneau s'arrête plus haut. */
+.position-panel:not(.zone-panel--phone) {
+  max-height: calc(100% - 20px - 400px);
+}
+
+.position-value {
+  flex: none;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.position-departures {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-3);
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.position-departure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.position-departure__to {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position-departure__late {
+  color: var(--ui-warn);
+}
+
+.position-load {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.position-fuel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.position-controls {
+  gap: var(--space-4);
+}
+
+/* La puce « revenir » de l'analyse de zone est en haut à droite : celle-ci se pose dessous. */
+.zone-chip--position {
+  top: 64px;
+}
+
+.veille__around {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+.veille__ok {
+  color: var(--ui-ink);
+  font-size: 12.5px;
+}
+
+@media (max-width: 719.98px) {
+  .position-panel.zone-panel--phone {
+    max-height: 56dvh;
+  }
+
+  .zone-chip--position {
+    top: auto;
+    bottom: calc(var(--sheet-h, 68px) + 58px);
+  }
+}
+
 /* --- « Aujourd'hui en France » : panneau de synthèse (à la place du catalogue sur ordinateur, onglet de la feuille sur téléphone) ---
    Une gravité se dit toujours par un signe (cercle, rond, triangle, losange) et un mot ; la couleur ne fait que doubler. */
 

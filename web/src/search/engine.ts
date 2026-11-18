@@ -5,6 +5,8 @@
  * millisecondes sans requête ; les lieux (réseau) arrivent à part, voir `places.ts`.
  */
 import { clock } from '../core/clock';
+import { distanceM } from '../core/geo';
+import { addProximity, type LonLat } from '../core/positionLogic';
 import type { ModuleManager } from '../core/moduleManager';
 import { actualiteProvider } from './actualite';
 import { bikesProvider } from './bikes';
@@ -84,16 +86,25 @@ export interface Group {
  * le meilleur résultat de tous est donc le premier de la liste, prêt pour Entrée.
  * `filter` ne garde qu'un type.
  */
-export function arrange(results: readonly SearchResult[], filter: Kind | null): Group[] {
+export function arrange(results: readonly SearchResult[], filter: Kind | null, origin: LonLat | null = null): Group[] {
   const groups: Group[] = [];
+  const ranked = origin ? withProximity(results, origin) : results;
   for (const kind of KIND_ORDER) {
     if (filter && kind !== filter) continue;
-    const own = results.filter((r) => r.kind === kind).sort((a, b) => b.score - a.score);
+    const own = ranked.filter((r) => r.kind === kind).sort((a, b) => b.score - a.score);
     // Même clé = même résultat vu deux fois (par deux fournisseurs) : on garde le premier.
     const unique = own.filter((r, i) => own.findIndex((o) => o.key === r.key) === i);
     if (unique.length > 0) groups.push({ kind, label: KIND_LABELS[kind], results: unique.slice(0, filter ? PER_GROUP_FILTERED : PER_GROUP) });
   }
   return groups.sort((a, b) => groupScore(b) - groupScore(a));
+}
+
+/**
+ * Quand la personne s'est localisée : un petit bonus aux résultats qui ont une place et sont près d'elle (`proximityBonus`,
+ * 30 au plus, nul à plus de 150 km). Les résultats sans place (trains, actions) gardent leur score.
+ */
+export function withProximity(results: readonly SearchResult[], origin: LonLat): SearchResult[] {
+  return addProximity(results, origin, distanceM);
 }
 
 /**
