@@ -32,6 +32,8 @@ interface Entry {
   version: number;
   timer?: ReturnType<typeof setInterval>;
   abort?: AbortController;
+  /** Préchargement en cours (couche masquée) : évite un second chargement si la couche s'ouvre entre-temps. */
+  prefetching?: Promise<void>;
   /** Heure réelle du dernier échec de chargement (pour ne pas réessayer en boucle). */
   lastFailure: number;
   /** Clé du dernier rendu : version + case de temps + relief + vue. */
@@ -417,7 +419,10 @@ export class ModuleManager {
       entry.data === undefined ||
       (module.refreshIntervalMs !== undefined && Date.now() - lastUpdated > module.refreshIntervalMs) ||
       (module.needsReload?.(entry.data, this.currentTime, this.snapshot[module.id]?.settings ?? {}) ?? false);
-    if (stale) void this.load(entry, { showLoading: entry.data === undefined });
+    if (stale && entry.data === undefined && entry.prefetching) {
+      // Un préchargement est déjà en route : on l'attend plutôt que de redemander (il met l'état à jour en finissant).
+      this.patch(module.id, { status: 'loading', error: undefined });
+    } else if (stale) void this.load(entry, { showLoading: entry.data === undefined });
     if (module.refreshIntervalMs) {
       entry.timer = setInterval(() => void this.load(entry, { showLoading: false }), module.refreshIntervalMs);
     }
@@ -458,6 +463,46 @@ export class ModuleManager {
     } finally {
       if (entry.abort === controller) entry.abort = undefined;
     }
+  }
+
+  /**
+   * Charge les données d'un module sans l'afficher (la recherche en a besoin avant que la couche ait été ouverte).
+   * Une seule fois : rien si les données sont là, et le même chargement est partagé s'il est en cours.
+   * La visibilité et le rafraîchissement périodique ne changent pas ; les abonnés sont prévenus à l'arrivée.
+   * La promesse est rejetée si le chargement échoue ; elle se résout sans données si la couche est masquée entre-temps.
+   */
+  prefetch(id: string): Promise<void> {
+    const entry = this.entries.get(id);
+    const module = entry?.module;
+    if (!entry || !module?.load || entry.data !== undefined) return Promise.resolve();
+    if (entry.prefetching) return entry.prefetching;
+    entry.abort?.abort();
+    const controller = new AbortController();
+    entry.abort = controller;
+    const run = async (): Promise<void> => {
+      try {
+        const data = await module.load!({ signal: controller.signal, time: this.currentTime, settings: this.snapshot[id]?.settings ?? {} });
+        if (controller.signal.aborted) return;
+        entry.data = data;
+        entry.version++;
+        this.patch(id, { status: 'ready', error: undefined, lastUpdated: Date.now() });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error(`[module ${id}]`, error);
+        // Masquée, la couche n'affiche pas d'erreur : seul l'appelant la reçoit.
+        if (this.isVisible(entry)) this.patch(id, { status: 'error', error: error instanceof Error ? error.message : String(error) });
+        throw error;
+      } finally {
+        if (entry.abort === controller) entry.abort = undefined;
+      }
+    };
+    const pending = run();
+    entry.prefetching = pending;
+    const done = (): void => {
+      if (entry.prefetching === pending) entry.prefetching = undefined;
+    };
+    pending.then(done, done);
+    return pending;
   }
 
   private patch(id: string, patch: Partial<ModuleRuntimeState>): void {

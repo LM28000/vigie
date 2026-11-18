@@ -6,11 +6,13 @@
  */
 import type { ChargersData, Station } from '../modules/chargers';
 import { dataOf, indexed, openObject, shownBonus } from './access';
-import { matchScore, pad, rank, TextIndex, TopK } from './normalize';
+import { matchScore, pad, parseQuery, rank, TextIndex, TopK } from './normalize';
 import type { Provider, SearchResult } from './types';
 
 const MODULE = 'bornes';
 const MAX_RESULTS = 5;
+/** Mots qui disent « borne » sans la nommer : « borne ionity » se cherche comme « ionity ». */
+const GENERIC = new Set(['borne', 'bornes', 'recharge', 'electrique', 'electriques']);
 
 const build = indexed<ChargersData, { index: TextIndex; stations: Station[] }>((data) => ({
   index: new TextIndex(data.stations.map((s) => pad(`${s.name} ${s.operator} ${s.address}`))),
@@ -25,8 +27,13 @@ export const chargersProvider: Provider = {
 
   search(query, ctx) {
     const data = dataOf<ChargersData>(ctx.manager, MODULE);
+    if (!data) return [];
+    const words = query.tokens.map((t) => t.word).filter((word) => !GENERIC.has(word));
+    // Ces mots seuls désignent les 53 000 stations : rien à proposer.
+    if (words.length === 0) return [];
+    if (words.length < query.tokens.length) return this.search(parseQuery(words.join(' ')), ctx);
     // Deux lettres suffisent à en trouver des milliers : on attend la troisième.
-    if (!data || query.text.length < 3) return [];
+    if (query.text.length < 3) return [];
     const bonus = shownBonus(ctx.manager, MODULE);
     const { index, stations } = build(data);
     const top = new TopK<Station>(MAX_RESULTS);
