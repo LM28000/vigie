@@ -16,6 +16,7 @@ import { SyntheseView } from './ui/Synthese';
 import { VeilleToasts, VeilleView } from './ui/Veille';
 import { TimeBar } from './ui/TimeBar';
 import { VisionControl } from './ui/VisionControl';
+import { PositionTool } from './ui/Position';
 import { ZoneTool } from './ui/ZoneTool';
 import { TourPanel, useTour } from './ui/Tour';
 import { Welcome, shouldShowWelcome } from './ui/Welcome';
@@ -200,6 +201,7 @@ export function App() {
       )}
 
       <ZoneTool manager={manager} phone={phone} />
+      <PositionTool manager={manager} phone={phone} />
       <VeilleToasts manager={manager} phone={phone} />
       <VisionControl manager={manager} />
 

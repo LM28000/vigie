@@ -38,6 +38,8 @@ export interface SearchResult {
   live?: string;
   /** `alert` : le texte vivant signale un problème (retard important). */
   liveTone?: 'alert';
+  /** Où se trouve l'objet, quand il a une place précise : sert au petit bonus de proximité (`engine.ts`). */
+  at?: { lon: number; lat: number };
   /** Classement : plus grand = plus haut. Comparable d'un type à l'autre. */
   score: number;
   /** Ce que fait le résultat quand on le choisit. */

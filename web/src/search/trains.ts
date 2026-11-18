@@ -64,6 +64,7 @@ function searchStations(index: Index, query: Query, ctx: SearchContext, bonus: n
       title: station.name,
       subtitle: 'Gare · tableau d’affichage',
       live: `${departures} départ${departures > 1 ? 's' : ''} dans l’heure`,
+      at: station,
       score,
       run: () =>
         openObject(ctx.manager, MODULE, { type: 'gare', key: station.key } satisfies TrainsSelection, {

@@ -82,6 +82,7 @@ export const webcamsProvider: Provider = {
       kind: 'webcam',
       title: entry.title,
       subtitle: entry.subtitle,
+      at: entry,
       score,
       run: () => openObject(ctx.manager, MODULE, entry.select, { fallback: entry, zoom: 14 }),
     }));

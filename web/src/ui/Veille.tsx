@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ringBounds } from '../core/geo';
+import { position, usePosition } from '../core/position';
+import { WATCH_RADII_KM, type WatchRadiusKm } from '../core/positionLogic';
 import type { ModuleManager } from '../core/moduleManager';
 import { allDepartments, levelLabel, type Action } from '../core/syntheseModel';
 import {
@@ -9,6 +11,7 @@ import {
   zoneFromCircle,
   zoneFromCommune,
   zoneFromDepartment,
+  zoneAroundMe,
   zoneFromPolygon,
   type CommuneHit,
   type EventType,
@@ -219,10 +222,65 @@ function ZoneCard({ zone, active, manager, phone, onPicked }: { zone: VeilleZone
   );
 }
 
+// --- Surveiller autour de moi ------------------------------------------------------------------------------------------------
+
+/**
+ * Crée une zone circulaire (10, 25 ou 50 km) autour de la position de la personne. La localisation est demandée au clic
+ * (jamais avant) ; seule la position arrondie à environ 1 km entre dans la zone, comme dit sous le bouton.
+ */
+export function WatchAroundMe({ onAdded }: { onAdded?: (zone: VeilleZone) => void }) {
+  const here = usePosition();
+  const [radius, setRadius] = useState<WatchRadiusKm>(25);
+  const [message, setMessage] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const reason = position.unavailableReason();
+
+  const run = async () => {
+    setMessage(null);
+    setDone(false);
+    const found = await position.locate();
+    if (!found) {
+      setMessage(position.getSnapshot().error ?? 'Localisation impossible.');
+      return;
+    }
+    const zone = zoneAroundMe(found.lon, found.lat, radius);
+    if (!veille.addZone(zone)) {
+      setMessage(`${MAX_ZONES} zones au plus : en supprimer une d’abord.`);
+      return;
+    }
+    setDone(true);
+    setMessage(`Zone « ${zone.name} » ajoutée.`);
+    onAdded?.(zone);
+  };
+
+  return (
+    <div className="veille__around">
+      <div className="segmented" role="radiogroup" aria-label="Rayon de la zone">
+        {WATCH_RADII_KM.map((km) => (
+          <button key={km} type="button" role="radio" aria-checked={radius === km} className="segmented__option" onClick={() => setRadius(km)}>
+            {km} km
+          </button>
+        ))}
+      </div>
+      <button type="button" className="btn" onClick={() => void run()} disabled={!!reason || here.status === 'locating'}>
+        <Icon name="veille" size={16} /> {here.status === 'locating' ? 'Localisation…' : 'Surveiller autour de moi'}
+      </button>
+      <p className="today__unavailable">
+        {reason ?? 'Un cercle centré sur votre position arrondie à environ 1 km, gardé dans ce navigateur ; le serveur ne reçoit que ce contour, comme pour toute zone.'}
+      </p>
+      {message && (
+        <p className={done ? 'veille__ok' : 'veille__message'} role="status">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // --- Ajouter une zone ---------------------------------------------------------------------------------------------------------
 
 function ZoneAdder({ manager, onAdded, onDrawStart }: { manager: ModuleManager; onAdded: (zone: VeilleZone) => void; onDrawStart: () => void }) {
-  const [mode, setMode] = useState<'menu' | 'commune' | 'departement'>('menu');
+  const [mode, setMode] = useState<'menu' | 'commune' | 'departement' | 'moi'>('menu');
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<CommuneHit[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -312,7 +370,18 @@ function ZoneAdder({ manager, onAdded, onDrawStart }: { manager: ModuleManager; 
           <button type="button" className="btn veille__wide" onClick={aroundCenter} title="Un cercle de 10 km autour du centre de la carte">
             Cercle de 10 km autour du centre de la carte
           </button>
+          <button type="button" className="btn veille__wide" onClick={() => setMode('moi')} title="Un cercle centré sur votre position (demandée au clic)">
+            Autour de moi (ma position)
+          </button>
         </div>
+      )}
+      {mode === 'moi' && (
+        <WatchAroundMe
+          onAdded={(zone) => {
+            setMode('menu');
+            onAdded(zone);
+          }}
+        />
       )}
       {mode === 'commune' && (
         <div className="veille__search">
@@ -387,6 +456,7 @@ export function VeilleView({ manager, phone, onPicked, onClose }: VeilleViewProp
   const [adding, setAdding] = useState(false);
   const newKeys = new Set(state.newKeys);
   const secure = veille.notificationsAvailable();
+  const [notifyMessage, setNotifyMessage] = useState<string | null>(null);
 
   const pick = (alert: VeilleAlert) => {
     flyToEvent(manager, alert.event, phone);
@@ -508,9 +578,23 @@ export function VeilleView({ manager, phone, onPicked, onClose }: VeilleViewProp
           </p>
           {secure && (
             <label className="veille__check">
-              <input type="checkbox" checked={state.prefs.notify} onChange={(e) => void veille.setNotify(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={state.prefs.notify}
+                onChange={(e) => {
+                  setNotifyMessage(null);
+                  void veille.setNotify(e.target.checked).then((result) => {
+                    if (result === 'refusee') setNotifyMessage('Notifications non autorisées : elles se réactivent dans les réglages du navigateur (cadenas de la barre d’adresse).');
+                  });
+                }}
+              />
               <span>Notifier aussi quand l’onglet est masqué</span>
             </label>
+          )}
+          {secure && notifyMessage && (
+            <p className="veille__message" role="status">
+              {notifyMessage}
+            </p>
           )}
           <p className="today__unavailable">Zones et alertes sont gardées dans ce navigateur seulement. Défaut : {DEFAULT_TYPES.map((t) => TYPE_LABELS[t].toLowerCase()).join(', ')}.</p>
         </section>

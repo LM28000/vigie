@@ -33,6 +33,7 @@ export const parkingsProvider: Provider = {
       title: p.name,
       subtitle: `${p.kind === 'relais' ? 'Parc relais' : 'Parking'} · ${p.area}`,
       live: p.status === 'ferme' ? 'fermé' : p.status === 'abonnes' ? 'abonnés' : p.status === 'complet' ? 'complet' : `${p.free} place${p.free > 1 ? 's' : ''}`,
+      at: p,
       score,
       run: () => openObject(ctx.manager, MODULE, { id: p.id }, { fallback: p, zoom: 16 }),
     }));

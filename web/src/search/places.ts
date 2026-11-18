@@ -125,6 +125,7 @@ function toPlace(feature: GeoFeature, index: number, manager: ModuleManager): Pl
     subtitle,
     // Le score du service va de 0 à 1 ; l'ordre d'arrivée départage les ex æquo.
     score: 150 + (p.score ?? 0.5) * 150 - index * 3 + bonus,
+    at: { lon, lat },
     lon,
     lat,
     zoom,

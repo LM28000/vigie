@@ -58,6 +58,7 @@ export const chargersProvider: Provider = {
         title: station.name || 'Station de recharge',
         subtitle: [station.operator, station.address].filter(Boolean).join(' · ') || undefined,
         live: station.kw > 0 ? `${Math.round(station.kw)} kW` : undefined,
+        at: station,
         score,
         run: () => openObject(ctx.manager, MODULE, { id: station.id }, { fallback: station, zoom: 16 }),
       }));
