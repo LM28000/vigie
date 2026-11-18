@@ -7,6 +7,7 @@ Historique du projet, regroupé par phase et par date, reconstruit à partir de 
 - **Événements publics** (Territoire) : ~54 000 événements des 30 prochains jours (concerts, spectacles, expositions, fêtes, marchés, sport, visites, rencontres), huit catégories (teinte + pictogramme), disques gradués de loin, points puis pictogrammes puis titres en zoomant, opacité = en cours à l'instant de la frise. Période reliée à la frise (jour, instant, week-end, 7 jours), filtres catégorie, gratuit, longues durées ; fiche avec horaires, lieu, tarif, description, lien, source et licence ; recherche (« concert Lyon »).
 - **Sources** : DATAtourisme (export CSV public sans clé, ou flux ZIP JSON-LD de l'exploitant via `DATATOURISME_FLUX_URL`, secrète), Que faire à Paris (ODbL), OpenAgenda via le jeu Opendatasoft (sans clé). Lecture en continu, dédoublonnage titre + jour + 300 m, contenu adulte écarté.
 - **Veille** : type « Événement public (dans les 6 h) », désactivé par défaut.
+- **Corrections de données** : « Que faire à Paris » place les événements non localisés au même point du centre de Paris (écartés) et donne des heures locales avec un décalage faux (ignoré) ; les dates des fiches ne sont plus rognées à la fenêtre ; la fiche se redessine à l'arrivée du détail même horloge en pause (`web/src/core/infoRefresh.ts`).
 - **Serveur** : `server/src/events.rs`, `GET /api/evenements` et `GET /api/evenements/fiche`. Variables `DATATOURISME_FLUX_URL` et `EVENEMENTS_SOURCES`.
 
 ## 17 novembre 2026 — Zones surveillées (veille) et orages

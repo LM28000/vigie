@@ -15,6 +15,7 @@
  * des points colorés ; dès le zoom 12, les pictogrammes ; dès le zoom 14,5, les titres.
  */
 import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import { requestInfoRefresh } from '../core/infoRefresh';
 import { plainStatus } from '../core/infoStatus';
 import { defineModule, type InfoContent, type InfoTable, type LegendItem } from '../core/module';
 import { declutter, halfZoomBreaks, zoomBand } from '../map/declutter';
@@ -286,7 +287,9 @@ function detailOf(id: number): Detail | 'attente' | 'erreur' {
   fetch(`/api/evenements/fiche?id=${id}`)
     .then((r) => (r.ok ? (r.json() as Promise<Detail>) : Promise.reject(new Error(String(r.status)))))
     .then((d) => details.set(id, d))
-    .catch(() => details.set(id, 'erreur'));
+    .catch(() => details.set(id, 'erreur'))
+    // La fiche ouverte attend ce détail : elle se redessine même si l'horloge est en pause.
+    .finally(requestInfoRefresh);
   return 'attente';
 }
 
@@ -443,6 +446,7 @@ function spanText(start: number, end: number): string {
     const last = end - 1;
     return parisMidnight(last) === start ? `${day} · toute la journée` : `${day} au ${dayFormat.format(last)}`;
   }
+  if (end - start > 45 * DAY) return `Du ${dayFormat.format(start)} au ${dayFormat.format(end - 1)}`;
   if (parisMidnight(end - 1) !== parisMidnight(start)) return `${day} ${formatTime(start)} au ${dayFormat.format(end - 1)} ${formatTime(end)}`;
   return `${day} · ${formatTime(start)}–${formatTime(end)}`;
 }
@@ -718,6 +722,8 @@ export const evenements = defineModule<EventsData>({
   select(object) {
     const o = object as Partial<EventItem> & Partial<Cluster>;
     if (o.ids) return { ids: o.ids, lon: o.lon, lat: o.lat, count: o.count };
+    // Le détail se lit dès le clic : il est souvent déjà là au premier dessin de la fiche.
+    if (o.id !== undefined) detailOf(o.id);
     return { id: o.id };
   },
 

@@ -240,23 +240,32 @@ fn at_time(date: Date, time: &str) -> Option<i64> {
     Some(date.at(h, m, s, 0).to_zoned(paris()).ok()?.timestamp().as_second())
 }
 
+/// L'heure « murale » d'un horodatage de « Que faire à Paris » (« 2026-11-26T18:00:00+02:00 »), lue comme une heure de Paris :
+/// le jeu écrit l'heure locale (« de 18h00 à 20h00 ») mais lui accole un décalage faux (+02:00 en novembre, +00:00 pour les dates de
+/// début et de fin) ; le décalage est donc ignoré.
+fn parse_wall_clock(text: &str) -> Option<i64> {
+    let civil: jiff::civil::DateTime = text.trim().get(..19)?.parse().ok()?;
+    Some(civil.to_zoned(paris()).ok()?.timestamp().as_second())
+}
+
 fn parse_instant(text: &str) -> Option<i64> {
     text.trim().parse::<Timestamp>().ok().map(Timestamp::as_second)
 }
 
-/// Garde ce qui tombe dans la fenêtre (rogné), trie et fusionne ce qui se touche. Renvoie les moments et « longue durée ».
+/// Garde ce qui touche la fenêtre, trie et fusionne ce qui se touche (à deux minutes près : un jour finit à 23:59:59). Les moments ne
+/// sont **pas rognés** : la fiche doit dire les vraies dates (« du 1er janvier au 31 décembre »), pas celles de la fenêtre.
+/// Renvoie les moments et « longue durée ».
 pub fn finish(spans: Vec<(i64, i64)>, window: Window) -> Option<(Vec<(i64, i64)>, bool)> {
     let long = spans.iter().any(|&(s, e)| e - s > LONG_S);
     let mut kept: Vec<(i64, i64)> = spans
         .into_iter()
         .filter(|&(s, e)| e > s && e > window.from && s < window.to)
-        .map(|(s, e)| (s.max(window.from), e.min(window.to)))
         .collect();
     kept.sort_unstable();
     let mut merged: Vec<(i64, i64)> = Vec::new();
     for (s, e) in kept {
         match merged.last_mut() {
-            Some(last) if s <= last.1 => last.1 = last.1.max(e),
+            Some(last) if s <= last.1 + 120 => last.1 = last.1.max(e),
             _ => merged.push((s, e)),
         }
     }
@@ -439,25 +448,33 @@ struct ParisRecord {
     qfap_tags: Option<String>,
 }
 
+/// Le point que « Que faire à Paris » met aux événements qu'il n'a pas su localiser (centre de Paris, près de l'Hôtel de Ville) :
+/// 177 des 2 500 événements à venir en novembre 2026, dont des adresses de Belleville ou de Montsouris. Une position fausse
+/// est pire que pas de position : ils sont écartés, sauf ceux qui sont vraiment à l'Hôtel de Ville.
+fn paris_fallback(lon: f64, lat: f64, address_folded: &str) -> bool {
+    let (dx, dy) = ((lon - 2.351_828) * 111_000.0 * 48.86_f64.to_radians().cos(), (lat - 48.856_578) * 111_000.0);
+    dx.hypot(dy) < 150.0 && !address_folded.contains("hotel de ville")
+}
+
 fn paris_event(r: ParisRecord, window: Window) -> Option<Event> {
     let title = strip_html(r.title.as_deref()?);
     let ll = r.lat_lon?;
     let (lon, lat) = (ll.lon?, ll.lat?);
-    if title.is_empty() || !plausible(lon, lat) {
+    if title.is_empty() || !plausible(lon, lat) || paris_fallback(lon, lat, &fold(&format!("{} {}", r.address_name.as_deref().unwrap_or(""), r.address_street.as_deref().unwrap_or("")))) {
         return None;
     }
     let mut spans: Vec<(i64, i64)> = Vec::new();
     if let Some(occ) = r.occurrences.as_deref() {
         for part in occ.split(';') {
             if let Some((a, b)) = part.split_once('_')
-                && let (Some(s), Some(e)) = (parse_instant(a), parse_instant(b))
+                && let (Some(s), Some(e)) = (parse_wall_clock(a), parse_wall_clock(b))
             {
                 spans.push((s, e));
             }
         }
     }
     if spans.is_empty()
-        && let (Some(s), Some(e)) = (r.date_start.as_deref().and_then(parse_instant), r.date_end.as_deref().and_then(parse_instant))
+        && let (Some(s), Some(e)) = (r.date_start.as_deref().and_then(parse_wall_clock), r.date_end.as_deref().and_then(parse_wall_clock))
     {
         spans.push((s, e));
     }
@@ -1238,10 +1255,13 @@ mod tests {
         let spans = vec![(b, c), (a, b), (1, 2)];
         let (kept, long) = finish(spans, window()).unwrap();
         assert_eq!(kept, vec![(a, c)], "les deux jours se touchent, le passé lointain est écarté");
+        // Un jour qui finit à 23:59:59 et le suivant qui commence à minuit ne font qu'un moment.
+        let (merged, _) = finish(vec![(a, b - 1), (b, c)], window()).unwrap();
+        assert_eq!(merged, vec![(a, c)]);
         assert!(!long);
         let (long_kept, long) = finish(vec![(NOW - 900 * 86400, NOW + 900 * 86400)], window()).unwrap();
         assert!(long);
-        assert_eq!(long_kept, vec![(window().from, window().to)]);
+        assert_eq!(long_kept, vec![(NOW - 900 * 86400, NOW + 900 * 86400)], "les vraies dates, pas celles de la fenêtre");
         assert!(finish(vec![(NOW + 40 * 86400, NOW + 41 * 86400)], window()).is_none());
     }
 
@@ -1254,20 +1274,29 @@ mod tests {
       {"id":"2","title":"Le musée Banksy","lead_text":"Expo permanente","date_start":"2019-06-01T00:00:00+00:00","date_end":"2027-12-31T23:59:59+00:00",
        "occurrences":null,"lat_lon":{"lon":2.3416,"lat":48.8746},"price_type":"payant","qfap_tags":"Expo","address_city":"Paris"},
       {"id":"3","title":"Sans position","date_start":"2026-11-18T10:00:00+00:00","date_end":"2026-11-18T12:00:00+00:00","lat_lon":{"lon":null,"lat":null}},
+      {"id":"5","title":"Jeudi à la Ferme","date_start":"2026-11-26T18:00:00+00:00","date_end":"2026-11-26T20:00:00+00:00",
+       "occurrences":"2026-11-26T18:00:00+02:00_2026-11-26T20:00:00+02:00","address_name":"Ferme Montsouris","address_street":"17 Vla Saint Jacques",
+       "lat_lon":{"lon":2.351828,"lat":48.856578}},
+      {"id":"6","title":"Visite de l'Hôtel de Ville","date_start":"2026-11-20T14:00:00+00:00","date_end":"2026-11-20T15:00:00+00:00",
+       "address_name":"Hôtel de Ville","lat_lon":{"lon":2.351828,"lat":48.856578}},
       {"id":"4","title":"Soirée libertine","date_start":"2026-11-18T20:00:00+00:00","date_end":"2026-11-18T23:00:00+00:00","lat_lon":{"lon":2.3,"lat":48.8}}
     ]"#;
 
     #[test]
     fn que_faire_a_paris() {
         let events = parse_paris(PARIS.as_bytes(), window()).unwrap();
-        assert_eq!(events.len(), 2, "sans position et libertine écartés");
+        let titles: Vec<&str> = events.iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles, ["Big Mother", "Le musée Banksy", "Visite de l'Hôtel de Ville"], "sans position, au point de repli du centre de Paris et libertine écartés");
         let big = &events[0];
         assert_eq!((big.title.as_str(), big.cat, big.price, big.src), ("Big Mother", 1, 2, SRC_PARIS));
         assert_eq!(big.spans.len(), 2, "le passé lointain est écarté");
+        // L'heure écrite est l'heure de Paris, quel que soit le décalage (faux) accolé par la source.
         assert_eq!(big.spans[0].0, parse_instant("2026-11-18T19:00:00+01:00").unwrap());
         assert_eq!(big.price_text, "De 10 à 25 €");
         assert_eq!(big.address, "37 rue Volta, 75003 Paris");
         assert_eq!(big.description, "Une pièce");
+        let hotel = &events[2];
+        assert_eq!(hotel.spans, vec![(parse_instant("2026-11-20T14:00:00+01:00").unwrap(), parse_instant("2026-11-20T15:00:00+01:00").unwrap())]);
         let banksy = &events[1];
         assert!(banksy.long, "exposition permanente");
         assert_eq!(banksy.cat, 2);
@@ -1448,6 +1477,37 @@ Visites du vignoble,https://www.datatourisme.fr/ontology/core#EntertainmentAndEv
         assert_eq!((row[3].as_u64(), row[4].as_u64(), row[5].as_u64()), (Some(0), Some(0), Some(2)), "catégorie, source, gratuit");
         assert_eq!((row[6].as_str(), row[7].as_str()), (Some("Concert"), Some("Paris")));
         assert_eq!(row[8][0], e.spans[0].0 / 60);
+    }
+
+    /// La liste servie et la fiche s'accordent : chaque identifiant de la liste retrouve, dans les détails, l'événement de même titre,
+    /// de même position et de mêmes moments (pas d'index décalé entre la liste filtrée, la sélection et la requête de détail).
+    #[test]
+    fn identifiant_de_la_liste_retrouve_le_bon_detail() {
+        let mut events = Vec::new();
+        for i in 0..200 {
+            let mut e = event((i % 3) as u8, &format!("cle-{i}"), &format!("Événement numéro {i}"), 2.0 + f64::from(i) * 0.01, 48.0 + f64::from(i) * 0.005, "2026-11-20");
+            e.commune = format!("Commune {i}");
+            events.push(e);
+        }
+        // Deux événements de même titre, de même jour, éloignés : tous deux gardés, avec deux identifiants.
+        events.push(event(1, "x", "Marché", 2.0, 48.0, "2026-11-20"));
+        events.push(event(2, "y", "Marché", 5.0, 45.0, "2026-11-20"));
+        let merged = merge(vec![events]);
+        assert_eq!(merged.len(), 202);
+        let gz = encode(&merged, NOW).unwrap();
+        let mut json = String::new();
+        GzDecoder::new(&gz[..]).read_to_string(&mut json).unwrap();
+        let value: Value = serde_json::from_str(&json).unwrap();
+        for row in value["events"].as_array().unwrap() {
+            let id = row[0].as_u64().unwrap();
+            let i = merged.binary_search_by_key(&id, |e| e.id).expect("l'identifiant de la liste est dans les détails");
+            let e = &merged[i];
+            assert_eq!(row[6], e.title.as_str());
+            assert_eq!(row[7], e.commune.as_str());
+            assert_eq!(row[1], (e.lon * 1e5).round() / 1e5);
+            assert_eq!(row[2], (e.lat * 1e5).round() / 1e5);
+            assert_eq!(row[8][0], e.spans[0].0 / 60);
+        }
     }
 
     #[test]
