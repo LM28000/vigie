@@ -65,6 +65,7 @@ flowchart LR
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `rivers.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, rivières (Hub'Eau), feux. |
 | `neige.rs` | Neige et avalanches : bulletins de risque d'avalanche (BRA) de 35 massifs et hauteurs de neige aux stations, via le portail API Météo-France (clé `METEOFRANCE_API_KEY`, requêtes espacées, 2 relevés des bulletins par jour, persistance dans `DATA_DIR/neige/`). Sans clé : 503 propre, aucune requête. Contours des massifs embarqués (`data/massifs_bra.geojson`). |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
+| `events.rs` | Événements publics des 30 prochains jours (DATAtourisme CSV ou flux ZIP JSON-LD, Que faire à Paris, OpenAgenda via Opendatasoft) : lecture en continu, fusion et dédoublonnage, liste en colonnes gzip (`GET /api/evenements`) et fiche à la demande (`/api/evenements/fiche`). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
 | `tiles/` | Moteur de tuiles vectorielles : voir [moteur-de-tuiles.md](moteur-de-tuiles.md). |
 | `analyse.rs` | `POST /api/analyse` : voir [analyse-de-zone.md](analyse-de-zone.md). |

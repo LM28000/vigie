@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { clock, type ClockState } from '../core/clock';
+import { getInfoRefreshVersion, subscribeInfoRefresh } from '../core/infoRefresh';
 import type { ModuleManager, ModuleRuntimeState } from '../core/moduleManager';
 
 /** État de l'horloge (lecture, vitesse, direct). Ne change qu'aux actions de l'utilisateur. */
@@ -55,6 +56,8 @@ export const PHONE_QUERY = '(max-width: 719.98px)';
 /** Objet sélectionné et sa fiche à l'instant affiché, recalculée en continu (un train avance, un retard change). */
 export function useSelectionInfo(manager: ModuleManager) {
   const selection = useSyncExternalStore(manager.subscribe, manager.getSelection);
+  // Une fiche dont le contenu arrive après coup demande à être recalculée, même horloge en pause.
+  useSyncExternalStore(subscribeInfoRefresh, getInfoRefreshVersion);
   // Recalculer aussi quand de nouvelles données arrivent (horloge en pause, saut dans le temps…).
   useModuleStates(manager);
   const time = useClockTime(500);

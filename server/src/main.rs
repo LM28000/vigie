@@ -27,6 +27,8 @@
 //! - `TUILES_JEUX` (tous) : liste des jeux de tuiles à mettre en service, séparés par des virgules (ex. « population ») ;
 //! - `INSEE_CARREAUX_URL` (millésime 2019 de l'INSEE) : adresse du zip des carreaux de population ;
 //! - `CESIUM_ION_TOKEN` (aucun) : jeton Cesium ion de la vue photoréaliste ; sans lui, le réglage est indisponible ;
+//! - `DATATOURISME_FLUX_URL` (aucune) : adresse de téléchargement du flux DATAtourisme de l'utilisateur (secrète) ; sans elle, l'export CSV public est lu ;
+//! - `EVENEMENTS_SOURCES` (paris,datatourisme,openagenda) : sources d'événements à relever ;
 //! - `ATMO_USERNAME` et `ATMO_PASSWORD` (aucun) : compte Atmo Data pour la qualité de l'air ; sans eux, la couche est désactivée.
 
 mod accidents;
@@ -35,6 +37,7 @@ mod analyse;
 mod api;
 mod bikes;
 mod dem;
+mod events;
 mod estimates;
 mod fires;
 mod gtfs_compact;
@@ -141,6 +144,7 @@ async fn main() -> Result<()> {
     tokio::spawn(accidents::poll_forever(http.clone(), config.data_dir.clone()));
     tokio::spawn(monuments::poll_forever(http.clone(), config.data_dir.clone()));
     tokio::spawn(cameras::poll_forever(http.clone(), config.data_dir.clone()));
+    tokio::spawn(events::poll_forever(http.clone(), config.data_dir.clone()));
     webcams::spawn(http.clone(), config.data_dir.clone());
     tokio::spawn(traffic::poll_forever(http.clone(), state.clone()));
     tokio::spawn(traffic_state::poll_forever(http.clone(), state.clone()));

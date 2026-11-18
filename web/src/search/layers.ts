@@ -49,6 +49,7 @@ const SYNONYMS: Record<string, string> = {
   foudre: 'foudre eclair eclairs orage impacts mtg',
   photos: 'photos aeriennes anciennes remonter le temps ign histoire',
   isochrones: 'isochrone isochrones temps de trajet accessibilite zone atteignable',
+  evenements: 'evenement evenements concert concerts spectacle spectacles exposition expositions marche brocante festival fete sortie sorties agenda animation',
   elections: 'vote scrutin presidentielle europeennes legislatives resultats bureau de vote participation',
 };
 

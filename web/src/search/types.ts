@@ -2,7 +2,7 @@ import type { ModuleManager } from '../core/moduleManager';
 import type { Query } from './normalize';
 
 /** Les types de résultats, dans l'ordre où l'on propose de les filtrer. */
-export type Kind = 'lieu' | 'gare' | 'train' | 'avion' | 'navire' | 'reseau' | 'velo' | 'parking' | 'massif' | 'borne' | 'webcam' | 'action' | 'station' | 'eau' | 'monument' | 'espace' | 'zone';
+export type Kind = 'lieu' | 'gare' | 'train' | 'avion' | 'navire' | 'reseau' | 'velo' | 'parking' | 'massif' | 'borne' | 'webcam' | 'evenement' | 'action' | 'station' | 'eau' | 'monument' | 'espace' | 'zone';
 
 export const KIND_LABELS: Record<Kind, string> = {
   lieu: 'Lieux',
@@ -16,6 +16,7 @@ export const KIND_LABELS: Record<Kind, string> = {
   massif: 'Massifs et avalanches',
   borne: 'Bornes de recharge',
   webcam: 'Webcams',
+  evenement: 'Événements',
   action: 'Couches et actions',
   station: 'Stations-service',
   eau: 'Rivières et marées',
@@ -24,7 +25,7 @@ export const KIND_LABELS: Record<Kind, string> = {
   zone: 'Air, vigilance et séismes',
 };
 
-export const KIND_ORDER: readonly Kind[] = ['lieu', 'gare', 'train', 'avion', 'navire', 'reseau', 'velo', 'parking', 'massif', 'borne', 'webcam', 'action', 'station', 'eau', 'monument', 'espace', 'zone'];
+export const KIND_ORDER: readonly Kind[] = ['lieu', 'gare', 'train', 'avion', 'navire', 'reseau', 'velo', 'parking', 'massif', 'borne', 'webcam', 'evenement', 'action', 'station', 'eau', 'monument', 'espace', 'zone'];
 
 export interface SearchResult {
   /** Identifiant stable (clé React et `id` de l'option). */
