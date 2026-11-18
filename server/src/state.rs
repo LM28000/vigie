@@ -47,6 +47,8 @@ struct Inner {
     /// Qualité de l'air, et la raison de son absence quand la couche est désactivée (pas d'identifiants).
     air: RwLock<Option<Bytes>>,
     air_disabled: RwLock<Option<&'static str>>,
+    /// Qualité de l'air, mesures horaires aux stations (LCSQA / Geod'air).
+    air_mesures: RwLock<Option<Bytes>>,
     /// Les deux morceaux de la réponse des transports (positions publiées, positions estimées), assemblés en `transit`.
     transit_parts: Mutex<TransitParts>,
     /// Tuiles vectorielles (population…) et la grille de population des isochrones (voir `tiles/`).
@@ -76,6 +78,7 @@ impl AppState {
             vigilance: RwLock::new(None),
             air: RwLock::new(None),
             air_disabled: RwLock::new(None),
+            air_mesures: RwLock::new(None),
             transit_parts: Mutex::default(),
             tiles: crate::tiles::Registry::new(),
         }))
@@ -243,6 +246,14 @@ impl AppState {
 
     pub fn set_air(&self, body: Vec<u8>) {
         *self.0.air.write().expect("verrou de la qualité de l'air") = Some(Bytes::from(body));
+    }
+
+    pub fn air_mesures(&self) -> Option<Bytes> {
+        self.0.air_mesures.read().expect("verrou des mesures de l'air").clone()
+    }
+
+    pub fn set_air_mesures(&self, body: Vec<u8>) {
+        *self.0.air_mesures.write().expect("verrou des mesures de l'air") = Some(Bytes::from(body));
     }
 
     pub fn air_disabled(&self) -> Option<&'static str> {

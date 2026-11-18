@@ -9,6 +9,7 @@ import { distanceM } from '../core/geo';
 import { addProximity, type LonLat } from '../core/positionLogic';
 import type { ModuleManager } from '../core/moduleManager';
 import { actualiteProvider } from './actualite';
+import { airMesuresProvider } from './airMesures';
 import { bikesProvider } from './bikes';
 import { neigeProvider } from './neige';
 import { parkingsProvider } from './parkings';
@@ -46,6 +47,7 @@ const PROVIDERS: readonly Provider[] = [
   monumentsProvider,
   satellitesProvider,
   zonesProvider,
+  airMesuresProvider,
   evenementsProvider,
   actualiteProvider,
   layersProvider,
