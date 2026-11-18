@@ -235,6 +235,10 @@ struct StationOut<'a> {
     vig: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     vig_name: Option<&'a str>,
+    /// Station soumise à la marée (marégraphe, estuaire : voir `is_tidal`). Sa hauteur suit les marées : le serveur n'envoie ni
+    /// tendance (`d`) ni vigilance (`vig`), pour que le site ne la présente jamais comme une montée de rivière.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    tidal: bool,
 }
 
 #[derive(Serialize)]
@@ -540,29 +544,33 @@ fn round5(x: f64) -> f64 {
     (x * 1e5).round() / 1e5
 }
 
+/// Ce que le site reçoit d'une station (`None` sans mesure). Une station soumise à la marée n'a ni tendance ni vigilance : sa
+/// hauteur monte et descend deux fois par jour, ce n'est pas une crue.
+fn station_out<'a>(s: &'a Station, sections: &'a [Section]) -> Option<StationOut<'a>> {
+    let &(t, h) = s.heights.last()?;
+    let (lon, lat) = (s.def.longitude_station?, s.def.latitude_station?);
+    let name = s.def.libelle_station.as_deref().unwrap_or(&s.def.code_station);
+    let tidal = is_tidal(name, lon, lat);
+    let section = if tidal { None } else { nearest_section(sections, lon, lat) };
+    Some(StationOut {
+        id: &s.def.code_station,
+        name,
+        river: s.def.libelle_cours_eau.as_deref(),
+        lon: round5(lon),
+        lat: round5(lat),
+        h,
+        t,
+        d: if tidal { None } else { change_over_3h(&s.heights) },
+        q: s.flow.map(|(_, q)| q),
+        qt: s.flow.map(|(t, _)| t),
+        vig: section.map(|x| x.level),
+        vig_name: section.map(|x| x.name.as_str()),
+        tidal,
+    })
+}
+
 fn publish(stations: &HashMap<String, Station>, sections: &[Section], now: i64) {
-    let mut out: Vec<StationOut> = stations
-        .values()
-        .filter_map(|s| {
-            let &(t, h) = s.heights.last()?;
-            let (lon, lat) = (s.def.longitude_station?, s.def.latitude_station?);
-            let section = nearest_section(sections, lon, lat);
-            Some(StationOut {
-                id: &s.def.code_station,
-                name: s.def.libelle_station.as_deref().unwrap_or(&s.def.code_station),
-                river: s.def.libelle_cours_eau.as_deref(),
-                lon: round5(lon),
-                lat: round5(lat),
-                h,
-                t,
-                d: change_over_3h(&s.heights),
-                q: s.flow.map(|(_, q)| q),
-                qt: s.flow.map(|(t, _)| t),
-                vig: section.map(|x| x.level),
-                vig_name: section.map(|x| x.name.as_str()),
-            })
-        })
-        .collect();
+    let mut out: Vec<StationOut> = stations.values().filter_map(|s| station_out(s, sections)).collect();
     if out.is_empty() {
         return;
     }
@@ -717,6 +725,36 @@ mod tests {
         assert!(!is_tidal("La Moselle à Hagondange", 6.18482, 49.25589));
         assert!(!is_tidal("La Garonne à Toulouse", 1.43, 43.6));
         assert!(!is_tidal("Le Layon à Saint-Georges-sur-Layon", -0.37448, 47.193));
+    }
+
+    #[test]
+    fn a_tidal_station_is_kept_but_without_trend_or_vigilance() {
+        let sections = vec![Section { id: "1".into(), name: "Garonne aval".into(), level: 3, lines: vec![vec![[-0.32, 44.63], [-0.33, 44.64]]] }];
+        let station = |name: &str, lon, lat| Station {
+            def: StationDef {
+                code_station: "X".into(),
+                libelle_station: Some(name.into()),
+                libelle_cours_eau: None,
+                longitude_station: Some(lon),
+                latitude_station: Some(lat),
+            },
+            heights: vec![(0, 1000), (3 * 3600, 4000)],
+            flow: None,
+        };
+        // Garonne à Cadillac : +3 m en 3 h par la marée, à côté d'un tronçon en vigilance.
+        let tidal = station("La Garonne à Cadillac", -0.32422, 44.63555);
+        let out = station_out(&tidal, &sections).unwrap();
+        assert!(out.tidal);
+        assert_eq!((out.d, out.vig), (None, None));
+        let json = serde_json::to_value(&out).unwrap();
+        assert_eq!(json["tidal"], true);
+        assert!(json.get("d").is_none() && json.get("vig").is_none());
+        // Une vraie rivière garde sa tendance et sa vigilance, et ne porte pas le drapeau.
+        let river = station("La Garonne à Toulouse", 1.43, 43.6);
+        let out = station_out(&river, &sections).unwrap();
+        assert!(!out.tidal);
+        assert_eq!(out.d, Some(3000));
+        assert!(serde_json::to_value(&out).unwrap().get("tidal").is_none());
     }
 
     #[test]
