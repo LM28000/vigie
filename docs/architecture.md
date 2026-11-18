@@ -61,8 +61,9 @@ flowchart LR
 | `bikes.rs`, `irve.rs`, `traffic.rs`, `traffic_state.rs` | Vélos en libre-service (GBFS), bornes de recharge, trafic routier. |
 | `parkings.rs` | Places libres des parkings de 9 agglomérations (portails ouverts), format commun et historique de 24 h. |
 | `synthese.rs` | « Aujourd'hui en France » : résumé des réponses déjà en mémoire des autres collecteurs (`GET /api/synthese`), sans requête externe, gardé 30 s. |
-| `synthese/veille.rs` | Zones surveillées (`POST /api/veille`) : un index national d'événements (vigilance, crues, rivières, feux, brouillage, avions militaires, trains en retard ou supprimés) recalculé au plus toutes les 30 s à partir des mêmes caches, filtré par zone (point dans le contour, départements). Aucune requête externe, aucune zone ni alerte gardée côté serveur. |
+| `synthese/veille.rs` | Zones surveillées (`POST /api/veille`) : un index national d'événements (vigilance, crues, rivières, feux, avalanches, brouillage, avions militaires, trains en retard ou supprimés) recalculé au plus toutes les 30 s à partir des mêmes caches, filtré par zone (point dans le contour, départements). Aucune requête externe, aucune zone ni alerte gardée côté serveur. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `rivers.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, rivières (Hub'Eau), feux. |
+| `neige.rs` | Neige et avalanches : bulletins de risque d'avalanche (BRA) de 35 massifs et hauteurs de neige aux stations, via le portail API Météo-France (clé `METEOFRANCE_API_KEY`, requêtes espacées, 2 relevés des bulletins par jour, persistance dans `DATA_DIR/neige/`). Sans clé : 503 propre, aucune requête. Contours des massifs embarqués (`data/massifs_bra.geojson`). |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
 | `tiles/` | Moteur de tuiles vectorielles : voir [moteur-de-tuiles.md](moteur-de-tuiles.md). |
@@ -70,7 +71,7 @@ flowchart LR
 | `history/` | Enregistrement et relecture : voir [historique-et-relecture.md](historique-et-relecture.md). |
 | `state.rs`, `api.rs`, `main.rs` | État partagé, routes HTTP, démarrage et réglages (voir [deploiement.md](deploiement.md)). |
 
-Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/rivieres`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/synthese`, `/api/veille`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
+Principales routes de l'API : `/api/trains`, `/api/reseau`, `/api/isochrone`, `/api/arrets`, `/api/avions`, `/api/brouillage`, `/api/bateaux`, `/api/transports`, `/api/velos`, `/api/bornes`, `/api/trafic`, `/api/vigilance`, `/api/marees`, `/api/rivieres`, `/api/neige`, `/api/air`, `/api/vent`, `/api/feux`, `/api/satellites`, `/api/accidents`, `/api/monuments`, `/api/analyse`, `/api/synthese`, `/api/veille`, `/api/tuiles/…`, `/api/historique/…` et `/api/health`.
 
 ## Le site (`web/src/`)
 

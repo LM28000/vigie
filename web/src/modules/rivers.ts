@@ -20,6 +20,11 @@
  * quand il est en vigilance jaune, orange ou rouge. Ces stations sont dessinées en dernier, dans un anneau de la
  * couleur de vigilance, et la fiche le dit.
  *
+ * Les stations soumises à la marée (marégraphes, estuaires de la Gironde, de la Seine aval, de la Loire aval, de l'Adour…, repérées
+ * par le serveur : `rivers::is_tidal`) sont gardées mais présentées à part : un point gris neutre avec une vague, sans couleur de
+ * montée ni de décrue, sans étiquette de variation, sans anneau de vigilance, et la fiche le dit. Leur hauteur monte et descend de
+ * un à trois mètres deux fois par jour : ce n'est pas une crue.
+ *
  * La couche est en direct seulement : le serveur ne garde pas d'historique des stations (l'enregistrement du projet
  * est fait pour des objets qui bougent). La fiche trace tout de même les 48 dernières heures de la station.
  */
@@ -51,10 +56,12 @@ interface ApiStation {
   /** Vigilance Vigicrues du tronçon voisin : 2 jaune, 3 orange, 4 rouge. */
   vig?: number;
   vigName?: string;
+  /** Station soumise à la marée (marégraphe, estuaire) : le serveur ne lui donne ni tendance ni vigilance. */
+  tidal?: boolean;
 }
 
-/** Tendance : `none` = sans mesure récente ou sans recul suffisant. */
-type Trend = 'fast-up' | 'up' | 'steady' | 'down' | 'none';
+/** Tendance : `none` = sans mesure récente ou sans recul suffisant ; `tidal` = soumise à la marée (pas de tendance de crue). */
+type Trend = 'fast-up' | 'up' | 'steady' | 'down' | 'none' | 'tidal';
 
 interface Station extends ApiStation {
   /** Ordre de dessin : la vigilance en dernier, et dedans les montées les plus vives. */
@@ -81,12 +88,15 @@ const TREND_LABEL: Record<Trend, string> = {
   steady: 'stable',
   down: 'baisse',
   none: 'tendance inconnue',
+  tidal: 'soumise à la marée',
 };
 
-const TREND_INDEX: Record<Exclude<Trend, 'none'>, number> = { 'fast-up': 0, up: 1, steady: 2, down: 3 };
-const trendColor = (trend: Exclude<Trend, 'none'>, theme: 'jour' | 'nuit') => RIVIERE[theme][TREND_INDEX[trend]]!;
+const TREND_INDEX: Record<Exclude<Trend, 'none' | 'tidal'>, number> = { 'fast-up': 0, up: 1, steady: 2, down: 3 };
+const trendColor = (trend: Exclude<Trend, 'none' | 'tidal'>, theme: 'jour' | 'nuit') => RIVIERE[theme][TREND_INDEX[trend]]!;
 
 function trendOf(s: ApiStation, now: number): Trend {
+  // Une station soumise à la marée n'a pas de tendance de crue : sa hauteur suit les marées (jusqu'à 3 m en 3 h).
+  if (s.tidal) return 'tidal';
   if (now - s.t * 1000 > STALE_MS || s.d === undefined) return 'none';
   if (s.d >= FAST_MM) return 'fast-up';
   if (s.d >= STEADY_MM) return 'up';
@@ -106,7 +116,7 @@ const sheets: Partial<Record<'jour' | 'nuit', IconSheet>> = {};
 /** Une pastille ronde, avec son signe : flèches, trait, ou anneau vide. Dessinées au premier usage (il faut un canvas). */
 function sheet(theme: 'jour' | 'nuit'): IconSheet {
   sheets[theme] ??= packIcons(
-    (['fast-up', 'up', 'steady', 'down', 'none'] as const).map((trend) => ({
+    (['fast-up', 'up', 'steady', 'down', 'none', 'tidal'] as const).map((trend) => ({
       key: key(trend),
       width: W,
       height: H,
@@ -127,6 +137,23 @@ function sheet(theme: 'jour' | 'nuit'): IconSheet {
           c.lineWidth = 2;
           c.beginPath();
           c.arc(cx, cy, r - 4, 0, Math.PI * 2);
+          c.stroke();
+          c.restore();
+          return;
+        }
+        if (trend === 'tidal') {
+          // Neutre (le gris des « stables », sans couleur de montée ni de décrue) : une vague, signe de la marée, pas une flèche.
+          ink(c, circle, RIVIERE[theme][2]!, { key: 2.2, halo: 2 });
+          c.save();
+          c.strokeStyle = '#ffffff';
+          c.lineWidth = 2.4;
+          c.lineCap = 'round';
+          c.beginPath();
+          for (const dy of [-3.4, 3.4]) {
+            c.moveTo(cx - 7, cy + dy);
+            c.bezierCurveTo(cx - 4.5, cy + dy - 3.4, cx - 2.5, cy + dy - 3.4, cx, cy + dy);
+            c.bezierCurveTo(cx + 2.5, cy + dy + 3.4, cx + 4.5, cy + dy + 3.4, cx + 7, cy + dy);
+          }
           c.stroke();
           c.restore();
           return;
@@ -236,7 +263,7 @@ async function loadRivers(signal: AbortSignal): Promise<RiversData> {
   for (const s of stations) {
     const trend = trendOf(s, now);
     // Du fond vers le dessus : sans tendance, stable, baisse, montée, montée vive ; la vigilance au-dessus de tout.
-    s.rank = (s.vig ? 10 + s.vig : 0) + { none: 0, steady: 1, down: 2, up: 3, 'fast-up': 4 }[trend];
+    s.rank = (s.vig ? 10 + s.vig : 0) + { none: 0, tidal: 0, steady: 1, down: 2, up: 3, 'fast-up': 4 }[trend];
   }
   stations.sort((a, b) => a.rank - b.rank);
   return { updatedAt: json.updatedAt * 1000, stations, byId: new Map(stations.map((s) => [s.id, s])) };
@@ -304,6 +331,7 @@ export const rivers = defineModule<RiversData>({
       { color: RIVIERE.jour[2]!, label: 'Stable (moins de 5 cm en 3 h)', icon: jour.dataUrl(key('steady')) },
       { color: RIVIERE.jour[3]!, label: 'Baisse (5 cm ou plus en 3 h)', icon: jour.dataUrl(key('down')) },
       { color: RIVIERE.jour[2]!, label: 'Sans mesure récente ou sans tendance', icon: jour.dataUrl(key('none')) },
+      { color: RIVIERE.jour[2]!, label: 'Soumis à la marée (estuaire, marégraphe) : ni tendance ni vigilance', icon: jour.dataUrl(key('tidal')) },
       { color: STATUS_COLORS.orange, label: 'Anneau de couleur : tronçon voisin en vigilance crues', size: 'large' as const },
     ];
   },
@@ -316,7 +344,8 @@ export const rivers = defineModule<RiversData>({
     const count = (t: Trend) => shown.filter((s) => s.trend === t).length;
     const rising = count('up') + count('fast-up');
     const alerts = data.stations.filter((s) => s.vig).length;
-    return `${data.stations.length} stations · ${rising} montent, ${count('down')} baissent${alerts ? ` · ${alerts} sur un tronçon en vigilance` : ''}`;
+    const tidal = count('tidal');
+    return `${data.stations.length} stations · ${rising} montent, ${count('down')} baissent${alerts ? ` · ${alerts} sur un tronçon en vigilance` : ''}${tidal ? ` · ${tidal} soumises à la marée` : ''}`;
   },
 
   deckLayers({ data, selection, terrain, view, night }) {
@@ -444,13 +473,15 @@ export const rivers = defineModule<RiversData>({
     const live = isLiveTime(time);
 
     let status: InfoContent['status'];
-    if (trend === 'none' && Date.now() - measuredAt > STALE_MS) status = plainStatus(`Sans mesure récente · dernière ${formatRelative(measuredAt)}`);
+    if (Date.now() - measuredAt > STALE_MS) status = plainStatus(`Sans mesure récente · dernière ${formatRelative(measuredAt)}`);
     else if (live) status = measuredStatus(time, measuredAt);
     else status = plainStatus(`En direct seulement · mesure de ${formatTime(measuredAt)}`);
 
     const q = s.q !== undefined ? flow(s.q) : undefined;
     const trendFigure =
-      s.d !== undefined && trend !== 'none'
+      trend === 'tidal'
+        ? { value: 'Marée', label: 'hauteur soumise à la marée : pas de tendance' }
+        : s.d !== undefined && trend !== 'none'
         ? { value: centimeters(s.d), label: `sur 3 h · ${TREND_LABEL[trend]}` }
         : { value: '—', label: 'tendance indisponible' };
     const figures = [
@@ -484,7 +515,7 @@ export const rivers = defineModule<RiversData>({
     if (entry.state === 'failed' && !chart) fields.push(['Courbe de 48 h', 'indisponible pour l’instant']);
 
     return {
-      kind: s.vig ? `Station hydrométrique · vigilance crues ${VIGILANCE_NAME[s.vig]}` : 'Station hydrométrique',
+      kind: s.vig ? `Station hydrométrique · vigilance crues ${VIGILANCE_NAME[s.vig]}` : trend === 'tidal' ? 'Station hydrométrique · soumise à la marée' : 'Station hydrométrique',
       title: s.name,
       subtitle: s.river,
       status,
@@ -492,6 +523,9 @@ export const rivers = defineModule<RiversData>({
       chart,
       fields,
       note:
+        (trend === 'tidal'
+          ? 'Cette station est soumise à la marée (marégraphe ou estuaire) : sa hauteur monte et descend deux fois par jour, de un à trois mètres en quelques heures, sans que ce soit une crue. Vigie ne calcule donc pour elle ni tendance de montée, ni alerte, ni vigilance de crue ; la courbe de 48 h montre le rythme des marées. '
+          : '') +
         (s.vig
           ? `Le tronçon Vigicrues voisin « ${s.vigName ?? ''} » est en vigilance ${VIGILANCE_NAME[s.vig]} : la station est proche de ce tronçon, sans être forcément l’un de ses points de mesure. `
           : '') +

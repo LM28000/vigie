@@ -235,6 +235,10 @@ struct StationOut<'a> {
     vig: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     vig_name: Option<&'a str>,
+    /// Station soumise à la marée (marégraphe, estuaire : voir `is_tidal`). Sa hauteur suit les marées : le serveur n'envoie ni
+    /// tendance (`d`) ni vigilance (`vig`), pour que le site ne la présente jamais comme une montée de rivière.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    tidal: bool,
 }
 
 #[derive(Serialize)]
@@ -290,27 +294,39 @@ const JUMP_RATE_M_PER_H: f64 = 10.0;
 
 /// Vrai pour une station soumise à la marée : sa hauteur monte de 1 à 3 m en 3 h deux fois par jour sans que ce soit une crue
 /// (relevé du 17 novembre 2026 : sur 45 stations « en forte montée », 18 étaient des marégraphes ou des estuaires, dont la
-/// Garonne à Cadillac, +3,05 m). Hub'Eau n'a pas de drapeau pour cela : on s'appuie sur le nom (« [Marégraphe] », « [La Manche] »,
-/// « [La Gironde] », « Station GPMB » du port de Bordeaux…) et sur les estuaires où la marée remonte les fleuves.
+/// Garonne à Cadillac, +3,05 m). Hub'Eau n'a pas de drapeau pour cela : on s'appuie sur le nom et sur les estuaires.
+///
+/// La règle doit être précise, car la couche Rivières montre désormais ces stations à part : un faux positif y retire à tort la
+/// tendance d'une vraie rivière. Relevé du 18 novembre 2026 sur 2 461 stations : la première version de la règle (tout nom qui
+/// commence par un crochet, rectangles sans condition de nom) en marquait 101, dont 60 à tort (« [L'Ancienne Ill] à Illzach »,
+/// « [Lac Léman] », « L'Eure à Louviers », « La Sèvre Nantaise à Vertou », « [La Lys] »…). Elle exige maintenant :
+/// - un mot de la mer ou de la marée dans le nom (« marégraphe », « GPMB » du port de Bordeaux, « [Port de… », ou un nom
+///   entre crochets qui est une étendue marine : « [La Manche] », « [Océan] », « [La Méditerranée] », « [La Gironde] ») ; ou
+/// - une station du **fleuve lui-même** (le nom commence par le fleuve) dans le rectangle de son estuaire : Garonne, Dordogne et
+///   Gironde jusqu'à Langon et Libourne ; Loire en aval d'Ancenis ; Seine en aval de Poses ; Charente ; Adour, Nive et gaves réunis.
+///   Les affluents (Eure, Risle, Cailly, Sèvre Nantaise, Jalles, Seudre…) ne sont pas marqués.
 pub fn is_tidal(name: &str, lon: f64, lat: f64) -> bool {
-    let lower = name.to_lowercase();
-    if lower.contains("marégraphe") || lower.contains("maregraphe") || lower.contains("gpmb") || lower.contains("[port de") {
+    let lower = name.trim().to_lowercase();
+    if lower.contains("marégraphe") || lower.contains("maregraphe") || lower.contains("gpmb") || lower.contains("[port de") || lower.contains("[la gironde]") {
         return true;
     }
-    // Un nom qui commence par un crochet est celui d'une étendue de mer ou d'estuaire (« [La Manche] à Cancale », « [Océan] à… »).
-    if name.trim_start().starts_with('[') {
+    // Un nom qui commence par un crochet est celui d'une source, d'un bief, d'un lac ou d'une étendue de mer : seules les étendues
+    // de mer comptent (« [La Manche] à Cancale », « [Océan] à… », « [La Méditerranée] au Grau-du-Roi »).
+    const SEAS: [&str; 6] = ["[la manche]", "[manche", "[océan", "[ocean", "[la méditerranée]", "[la mediterranee]"];
+    if SEAS.iter().any(|sea| lower.starts_with(sea)) {
         return true;
     }
-    // Estuaires et biefs maritimes (rectangles larges, volontairement) : Gironde, Garonne jusqu'à Langon, Dordogne jusqu'à
-    // Libourne ; Loire en aval d'Ancenis ; Seine en aval de Poses ; Charente ; Adour, Nive et gaves réunis.
-    const TIDAL_AREAS: [(f64, f64, f64, f64); 5] = [
-        (-1.25, 44.50, -0.15, 45.65),
-        (-2.30, 47.15, -1.30, 47.40),
-        (0.00, 49.20, 1.40, 49.55),
-        (-1.10, 45.80, -0.60, 46.05),
-        (-1.60, 43.40, -1.00, 43.60),
+    // Estuaires et biefs maritimes : rectangle (ouest, sud, est, nord) et fleuves concernés.
+    const TIDAL_AREAS: [((f64, f64, f64, f64), &[&str]); 5] = [
+        ((-1.25, 44.50, -0.15, 45.65), &["la garonne", "la dordogne", "la gironde"]),
+        ((-2.30, 47.15, -1.30, 47.40), &["la loire"]),
+        ((0.00, 49.20, 1.40, 49.55), &["la seine"]),
+        ((-1.10, 45.80, -0.60, 46.05), &["la charente"]),
+        ((-1.60, 43.40, -1.00, 43.60), &["l'adour", "la nive", "le gave"]),
     ];
-    TIDAL_AREAS.iter().any(|&(west, south, east, north)| lon >= west && lon <= east && lat >= south && lat <= north)
+    TIDAL_AREAS.iter().any(|&((west, south, east, north), rivers)| {
+        lon >= west && lon <= east && lat >= south && lat <= north && rivers.iter().any(|river| lower.starts_with(river))
+    })
 }
 
 /// Les hauteurs depuis le dernier saut : avant lui, l'échelle n'est plus la même. Sans saut, tout.
@@ -540,29 +556,33 @@ fn round5(x: f64) -> f64 {
     (x * 1e5).round() / 1e5
 }
 
+/// Ce que le site reçoit d'une station (`None` sans mesure). Une station soumise à la marée n'a ni tendance ni vigilance : sa
+/// hauteur monte et descend deux fois par jour, ce n'est pas une crue.
+fn station_out<'a>(s: &'a Station, sections: &'a [Section]) -> Option<StationOut<'a>> {
+    let &(t, h) = s.heights.last()?;
+    let (lon, lat) = (s.def.longitude_station?, s.def.latitude_station?);
+    let name = s.def.libelle_station.as_deref().unwrap_or(&s.def.code_station);
+    let tidal = is_tidal(name, lon, lat);
+    let section = if tidal { None } else { nearest_section(sections, lon, lat) };
+    Some(StationOut {
+        id: &s.def.code_station,
+        name,
+        river: s.def.libelle_cours_eau.as_deref(),
+        lon: round5(lon),
+        lat: round5(lat),
+        h,
+        t,
+        d: if tidal { None } else { change_over_3h(&s.heights) },
+        q: s.flow.map(|(_, q)| q),
+        qt: s.flow.map(|(t, _)| t),
+        vig: section.map(|x| x.level),
+        vig_name: section.map(|x| x.name.as_str()),
+        tidal,
+    })
+}
+
 fn publish(stations: &HashMap<String, Station>, sections: &[Section], now: i64) {
-    let mut out: Vec<StationOut> = stations
-        .values()
-        .filter_map(|s| {
-            let &(t, h) = s.heights.last()?;
-            let (lon, lat) = (s.def.longitude_station?, s.def.latitude_station?);
-            let section = nearest_section(sections, lon, lat);
-            Some(StationOut {
-                id: &s.def.code_station,
-                name: s.def.libelle_station.as_deref().unwrap_or(&s.def.code_station),
-                river: s.def.libelle_cours_eau.as_deref(),
-                lon: round5(lon),
-                lat: round5(lat),
-                h,
-                t,
-                d: change_over_3h(&s.heights),
-                q: s.flow.map(|(_, q)| q),
-                qt: s.flow.map(|(t, _)| t),
-                vig: section.map(|x| x.level),
-                vig_name: section.map(|x| x.name.as_str()),
-            })
-        })
-        .collect();
+    let mut out: Vec<StationOut> = stations.values().filter_map(|s| station_out(s, sections)).collect();
     if out.is_empty() {
         return;
     }
@@ -712,11 +732,57 @@ mod tests {
         assert!(is_tidal("La Loire à Mauves-sur-Loire", -1.37901, 47.2956));
         assert!(is_tidal("L'Aulne à Port-Launay - Guily Glaz [marégraphe]", -4.09519, 48.21267));
         // Des rivières qui montent vraiment (crues du jour) ne sont pas la marée.
+        // Les faux positifs de la première règle (relevé du 18 novembre 2026) : sources, biefs, lacs et affluents d'estuaire.
+        assert!(!is_tidal("[L'Ancienne Ill] à Illzach", 7.35, 47.77));
+        assert!(!is_tidal("[Lac Léman] en Suisse - St-Prex", 6.46, 46.48));
+        assert!(!is_tidal("[La Lys] à Saint-Venant - VNF", 2.55, 50.63));
+        assert!(!is_tidal("[Le ruisseau de Mougau Bihan] à Commana - Moulin Neuf", -3.99, 48.4));
+        assert!(!is_tidal("L'Eure à Louviers", 1.18, 49.22));
+        assert!(!is_tidal("La Risle à Pont-Authou", 0.69, 49.24));
+        assert!(!is_tidal("La Sèvre Nantaise à Vertou", -1.48, 47.17));
+        assert!(!is_tidal("La Boutonne à Tonnay-Boutonne", -0.7, 45.97));
+        // Et ce qui reste marqué : étendues de mer, fleuve de l'estuaire.
+        assert!(is_tidal("[La Gironde] au Verdon-sur-Mer", -1.06, 45.56));
+        assert!(is_tidal("[Océan] à Saint-Pierre-d'Oléron [l'Océan à la Cotinière]", -1.33, 45.91));
+        assert!(is_tidal("[La Méditerranée] au Grau-du-Roi - Marégraphe de Port-Camargue", 4.13, 43.52));
+        assert!(is_tidal("La Seine à Rouen - Station partenaire HAROPA", 1.07, 49.44));
+        assert!(is_tidal("La Charente à Rochefort", -0.95, 45.95));
+        assert!(is_tidal("Le Gave de Pau [Les Gaves réunis] à Peyrehorade", -1.11, 43.54));
         assert!(!is_tidal("L'Isère à Grenoble [Bastille]", 5.725, 45.19299));
         assert!(!is_tidal("La Liane à Wirwignes", 1.76758, 50.6812));
         assert!(!is_tidal("La Moselle à Hagondange", 6.18482, 49.25589));
         assert!(!is_tidal("La Garonne à Toulouse", 1.43, 43.6));
         assert!(!is_tidal("Le Layon à Saint-Georges-sur-Layon", -0.37448, 47.193));
+    }
+
+    #[test]
+    fn a_tidal_station_is_kept_but_without_trend_or_vigilance() {
+        let sections = vec![Section { id: "1".into(), name: "Garonne aval".into(), level: 3, lines: vec![vec![[-0.32, 44.63], [-0.33, 44.64]]] }];
+        let station = |name: &str, lon, lat| Station {
+            def: StationDef {
+                code_station: "X".into(),
+                libelle_station: Some(name.into()),
+                libelle_cours_eau: None,
+                longitude_station: Some(lon),
+                latitude_station: Some(lat),
+            },
+            heights: vec![(0, 1000), (3 * 3600, 4000)],
+            flow: None,
+        };
+        // Garonne à Cadillac : +3 m en 3 h par la marée, à côté d'un tronçon en vigilance.
+        let tidal = station("La Garonne à Cadillac", -0.32422, 44.63555);
+        let out = station_out(&tidal, &sections).unwrap();
+        assert!(out.tidal);
+        assert_eq!((out.d, out.vig), (None, None));
+        let json = serde_json::to_value(&out).unwrap();
+        assert_eq!(json["tidal"], true);
+        assert!(json.get("d").is_none() && json.get("vig").is_none());
+        // Une vraie rivière garde sa tendance et sa vigilance, et ne porte pas le drapeau.
+        let river = station("La Garonne à Toulouse", 1.43, 43.6);
+        let out = station_out(&river, &sections).unwrap();
+        assert!(!out.tidal);
+        assert_eq!(out.d, Some(3000));
+        assert!(serde_json::to_value(&out).unwrap().get("tidal").is_none());
     }
 
     #[test]

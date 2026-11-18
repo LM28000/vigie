@@ -6,6 +6,9 @@ import { circleRing, distanceM, distanceToRingM, inRing, ringAreaKm2, ringBounds
 import {
   ALERT_KEEP_MS,
   DEFAULT_TYPES,
+  EVENT_TYPES,
+  SERVER_TYPES,
+  TYPE_LABELS,
   FORGET_MS,
   MAX_ALERTS,
   MAX_ZONES,
@@ -242,4 +245,11 @@ test('séisme ressenti : magnitude 3 minimum, récent, assez près selon la magn
   assert.equal(events.find((e) => e.id === 'seisme:proche-m4').severity, 2);
   assert.match(events.find((e) => e.id === 'seisme:proche-m4').detail, /à \d+ km de la zone/);
   assert.equal(inside.time, Math.round((now - 30 * 60_000) / 1000));
+});
+
+test('le risque d\'avalanche fort est un type d\'événement du serveur, surveillé par défaut, avec son libellé', () => {
+  assert.ok(EVENT_TYPES.includes('avalanche'));
+  assert.ok(SERVER_TYPES.includes('avalanche'), 'évalué par le serveur, pas par le site');
+  assert.ok(DEFAULT_TYPES.includes('avalanche'));
+  assert.match(TYPE_LABELS.avalanche, /avalanche/i);
 });

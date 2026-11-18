@@ -11,6 +11,7 @@
 #   ATMO_USERNAME=… ATMO_PASSWORD=…    compte Atmo Data de la couche « Qualité de l'air » (secrets)
 #   IDFM_PRIM_API_KEY='…'              clé PRIM d'Île-de-France Mobilités (transports d'Île-de-France ; secrète, entre apostrophes)
 #   WINDY_WEBCAMS_KEY='…'              clé Windy Webcams (webcams de la couche « Caméras » ; secrète, entre apostrophes)
+#   METEOFRANCE_API_KEY='…'            clé du portail API Météo-France (couche « Neige et avalanches » ; secrète, entre apostrophes)
 
 name: carte-vivante
 
@@ -35,6 +36,8 @@ services:
       IDFM_PRIM_API_KEY: "${IDFM_PRIM_API_KEY:-}"
       # Vide = webcams Windy de la couche « Caméras » désactivées. Clé Windy Webcams : elle ne sort jamais du serveur.
       WINDY_WEBCAMS_KEY: "${WINDY_WEBCAMS_KEY:-}"
+      # Vide = couche « Neige et avalanches » indisponible (« clé Météo-France absente »), aucune requête vers Météo-France. Elle ne sort jamais du serveur.
+      METEOFRANCE_API_KEY: "${METEOFRANCE_API_KEY:-}"
       # Facultatifs : modes (« metro,tram,train,cable,bus » par défaut ; retirer « bus » économise ≈ 50 Mo en permanence : voir docs/couches.md), intervalle du relevé en secondes (180), budget de mémoire en Mo (100).
       IDFM_MODES: "${IDFM_MODES:-}"
       IDFM_INTERVALLE_S: "${IDFM_INTERVALLE_S:-}"

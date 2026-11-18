@@ -70,7 +70,38 @@ pub struct Synthese {
     pub planes: Option<PlanesOut>,
     pub jamming: Option<JammingOut>,
     pub air: Option<AirOut>,
+    pub avalanches: Option<AvalanchesOut>,
     pub trains: Option<TrainsOut>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AvalanchesOut {
+    /// Rédaction du plus récent des bulletins en cours (secondes UTC).
+    pub issued_at: i64,
+    /// Massifs qui ont un bulletin en cours, et parmi eux ceux en risque 4 ou 5 (fort, très fort) et en risque 3 (marqué).
+    pub total: usize,
+    pub high_count: usize,
+    pub marked_count: usize,
+    /// Les massifs en risque 4 ou 5, les plus graves d'abord. Le risque 3 est quotidien en plein hiver : il n'est que compté.
+    pub items: Vec<AvalancheItem>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AvalancheItem {
+    pub id: u16,
+    pub name: String,
+    pub lon: f64,
+    pub lat: f64,
+    /// Risque maximal (1 à 5), et risque sous et au-dessus de l'altitude de transition (mètres).
+    pub risk: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_low: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_high: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub altitude: Option<i32>,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -327,6 +358,9 @@ struct InStation {
     t: i64,
     d: Option<i32>,
     vig: Option<u8>,
+    /// Station soumise à la marée : le serveur ne lui donne ni tendance ni vigilance (`rivers::station_out`).
+    #[serde(default)]
+    tidal: bool,
     /// Nom du tronçon Vigicrues voisin (la veille s'en sert pour ne signaler qu'une fois un même tronçon).
     #[serde(rename = "vigName")]
     vig_name: Option<String>,
@@ -500,7 +534,7 @@ fn rivers(body: &Option<Bytes>, now: i64) -> Option<RiversOut> {
     let mut rising: Vec<&InStation> = input
         .stations
         .iter()
-        .filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM) && !rivers::is_tidal(&s.name, s.lon, s.lat))
+        .filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM) && !s.tidal && !rivers::is_tidal(&s.name, s.lon, s.lat))
         .collect();
     // Les montées les plus fortes d'abord ; à montée égale, celles qui sont déjà en vigilance.
     rising.sort_by(|a, b| b.d.cmp(&a.d).then(b.vig.cmp(&a.vig)).then(a.id.cmp(&b.id)));
@@ -634,6 +668,24 @@ fn jamming(body: &Option<Bytes>) -> Option<JammingOut> {
 const MAX_AIR_ZONES: usize = 3;
 const MAX_AIR_EPISODES: usize = 4;
 
+/// Risque d'avalanche : les massifs en risque fort (4) ou très fort (5). Un massif sans bulletin en cours (hors saison) n'est ni
+/// compté ni cité ; hors saison la rubrique est « calme » avec zéro massif (`total` = 0), le site la dit « pas de bulletin en cours ».
+fn avalanches(input: &Option<Vec<crate::neige::Warning>>) -> Option<AvalanchesOut> {
+    let warnings = input.as_ref()?;
+    let mut high: Vec<&crate::neige::Warning> = warnings.iter().filter(|w| w.risk >= 4).collect();
+    high.sort_by(|a, b| b.risk.cmp(&a.risk).then(a.name.cmp(&b.name)));
+    Some(AvalanchesOut {
+        issued_at: warnings.iter().map(|w| w.issued).max().unwrap_or(0),
+        total: warnings.len(),
+        high_count: high.len(),
+        marked_count: warnings.iter().filter(|w| w.risk == 3).count(),
+        items: high
+            .into_iter()
+            .map(|w| AvalancheItem { id: w.id, name: w.name.clone(), lon: w.lon, lat: w.lat, risk: w.risk, risk_low: w.risk_low, risk_high: w.risk_high, altitude: w.altitude })
+            .collect(),
+    })
+}
+
 fn air(body: &Option<Bytes>, today: &str) -> Option<AirOut> {
     let input: InAir = decoded("air", body)?;
     let day = input.days.iter().position(|d| d == today)?;
@@ -751,6 +803,8 @@ pub struct Inputs {
     pub planes: Option<Bytes>,
     pub jamming: Option<Bytes>,
     pub air: Option<Bytes>,
+    /// Bulletins d'avalanche en cours (`None` : pas de clé Météo-France, ou pas encore de relevé).
+    pub avalanches: Option<Vec<crate::neige::Warning>>,
 }
 
 /// Le jour à Paris, « AAAA-MM-JJ ».
@@ -769,6 +823,7 @@ pub fn build(inputs: &Inputs, trains: Option<TrainsOut>, now: i64) -> Synthese {
         planes: planes(&inputs.planes),
         jamming: jamming(&inputs.jamming),
         air: air(&inputs.air, &paris_day(now)),
+        avalanches: avalanches(&inputs.avalanches),
         trains,
     }
 }
@@ -795,6 +850,7 @@ pub async fn handler(State(state): State<AppState>) -> Response {
             planes: state.planes(),
             jamming: state.jamming(),
             air: state.air(),
+            avalanches: crate::neige::warnings(now),
         };
         let trains = state.realtime().map(|realtime| trains(&state.network(), &realtime, now));
         serde_json::to_vec(&build(&inputs, trains, now))
@@ -824,6 +880,37 @@ mod tests {
     }
 
     const NOW: i64 = 1_800_000_000;
+
+    fn warning(id: u16, name: &str, risk: u8) -> crate::neige::Warning {
+        crate::neige::Warning {
+            id,
+            name: name.into(),
+            lon: 6.8,
+            lat: 45.9,
+            bounds: [6.7, 45.8, 6.9, 46.0],
+            risk,
+            risk_low: Some(risk.saturating_sub(1).max(1)),
+            risk_high: Some(risk),
+            altitude: Some(2700),
+            issued: NOW - 3600,
+            valid_until: NOW + 80_000,
+        }
+    }
+
+    #[test]
+    fn avalanche_risk_cites_only_strong_and_very_strong_and_counts_the_marked_ones() {
+        let out = avalanches(&Some(vec![warning(3, "Mont-Blanc", 4), warning(10, "Vanoise", 3), warning(15, "Oisans", 5), warning(8, "Belledonne", 2), warning(9, "Maurienne", 3)])).unwrap();
+        assert_eq!((out.total, out.high_count, out.marked_count), (5, 2, 2));
+        assert_eq!(out.items.iter().map(|i| (i.name.as_str(), i.risk)).collect::<Vec<_>>(), vec![("Oisans", 5), ("Mont-Blanc", 4)]);
+        assert_eq!(out.issued_at, NOW - 3600);
+    }
+
+    #[test]
+    fn avalanche_risk_is_unavailable_without_data_and_calm_without_bulletins() {
+        assert!(avalanches(&None).is_none(), "sans clé : indisponible, pas calme");
+        let off_season = avalanches(&Some(vec![])).unwrap();
+        assert_eq!((off_season.total, off_season.high_count, off_season.items.len()), (0, 0, 0));
+    }
 
     #[test]
     fn groups_orange_and_red_by_phenomenon_and_ignores_yellow_and_past_periods() {

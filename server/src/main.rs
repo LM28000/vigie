@@ -46,6 +46,7 @@ mod irve;
 mod monuments;
 mod webcams;
 mod multimodal;
+mod neige;
 mod network;
 mod parkings;
 mod photoreal;
@@ -147,6 +148,7 @@ async fn main() -> Result<()> {
     tokio::spawn(air::poll_forever(http.clone(), state.clone()));
     tokio::spawn(tides::poll_forever(http.clone(), state.clone()));
     tokio::spawn(rivers::poll_forever(http.clone()));
+    tokio::spawn(neige::poll_forever(http.clone(), config.data_dir.clone()));
     tokio::spawn(estimates::poll_forever(http.clone(), config.data_dir.clone(), state.clone()));
     state.tiles().spawn(http.clone(), config.data_dir.clone());
     tokio::spawn(multimodal::load::load_forever(http.clone(), config.data_dir.clone(), state.clone()));

@@ -32,6 +32,7 @@ const SYNONYMS: Record<string, string> = {
   satellites: 'espace iss orbite satellite starlink station spatiale tiangong hubble gps galileo',
   pluie: 'meteo radar precipitations averse',
   vent: 'rafales meteo',
+  neige: 'neige avalanche avalanches risque massif montagne ski enneigement bulletin bra bera alpes pyrenees',
   parkings: 'parking parkings stationnement garer places libres parc relais',
   cameras: 'camera cameras webcam webcams videoprotection videosurveillance surveillance cctv',
   marees: 'maree marees maregraphe port niveau de la mer ocean pleine mer basse mer coefficient littoral',

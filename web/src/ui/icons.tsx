@@ -32,6 +32,8 @@ const PATHS: Record<string, string> = {
   'son-coupe': 'M5 9.5v5h3.5L13 18V6L8.5 9.5ZM16.5 9.5l5 5M21.5 9.5l-5 5',
   corbeille: 'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7M10 11v5M14 11v5',
   plus: 'M12 5v14M5 12h14',
+  // « Neige et avalanches » : un flocon.
+  neige: 'M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9.5 4.5 12 6.5l2.5-2M9.5 19.5 12 17.5l2.5 2M3.5 10.5l3 .5-.5 3M20.5 10.5l-3 .5.5 3',
   rivieres: 'M3 18c3-2.5 6 2.5 9 0s6 2.5 9 0M12 14V4M8.5 7.5 12 4l3.5 3.5',
   'brouillage-gps': 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM6.3 6.3l11.4 11.4M12 9v.01',
   // Couches (une par module)
