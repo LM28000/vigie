@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Neige : hauteurs relevées avec l'API Observation seule
+
+- **Problème** : la clé Météo-France est abonnée à « Données Publiques Observation » en v2, pas au « Paquet Observation » ; le serveur appelait `DPObs/v1` et `DPPaquetObs` et recevait `403`, donc aucune hauteur de neige.
+- **Liste des stations** lue en `DPObs/v2/liste-stations`.
+- **Repli station par station** : quand le paquet d'un département est refusé, le serveur interroge `DPObs/v2/station/horaire` pour chaque station des départements de massif à 800 m ou plus (environ 160), toutes les heures, au rythme espacé habituel.
+- **Tests** : `stations_de_montagne_interrogees_une_a_une`.
+
 ## 18 novembre 2026 — Recherche : couches chargées à la demande
 
 - **Problème** : « webcam chamonix », « borne ionity », « vélib bastille » ne donnaient rien tant que la couche n'avait pas été ouverte (les fournisseurs ne lisent que les données déjà chargées).

@@ -10,7 +10,10 @@
 //!   fichier « Metadata massifs » publié par Météo-France sur data.gouv.fr, Licence Ouverte 2.0).
 //! - **« Données Publiques Paquet Observation »** : `DPPaquetObs/v1/paquet/horaire?id-departement=<dép.>&format=json`, la
 //!   dernière observation horaire de toutes les stations d'un département, dont `sss`, la hauteur totale de neige au sol (en
-//!   mètres) pour celles qui la mesurent ; les noms et altitudes viennent de `DPObs/v1/liste-stations` (CSV).
+//!   mètres) pour celles qui la mesurent ; les noms et altitudes viennent de `DPObs/v2/liste-stations` (CSV).
+//! - **« Données Publiques Observation »** (v2) seule, sans le Paquet : `DPObs/v2/station/horaire?id_station=<id>&format=json`,
+//!   station par station. Quand le paquet d'un département est refusé (`403`, abonnement absent), le serveur interroge ainsi
+//!   les stations des départements de montagne situées à 800 m ou plus (environ 160), au même rythme espacé.
 //!
 //! # Quotas : on ne demande que ce qu'il faut
 //!
@@ -21,7 +24,8 @@
 //!   (`DATA_DIR/neige/bulletins.json`) : un redémarrage ne redemande rien, et **la fiche d'un massif ne coûte aucune requête**,
 //!   elle relit la mémoire ;
 //! - **les stations** : une requête par département de montagne (13), toutes les heures, plus la liste des stations une fois
-//!   par jour, soit environ 340 requêtes par jour.
+//!   par jour, soit environ 340 requêtes par jour ; sans le Paquet, une requête par station de montagne (environ 160) toutes
+//!   les heures, soit environ 3 900 requêtes par jour, sous la limite de 100 par minute de l'abonnement Observation.
 //!
 //! # Sans clé, ou hors saison
 //!
@@ -64,6 +68,8 @@ const STATIONS_REFUSED_RETRY_S: i64 = 6 * 3600;
 pub const GRACE_S: i64 = 6 * 3600;
 /// Les départements de montagne qui ont un massif BRA.
 const DEPARTMENTS: [&str; 13] = ["74", "73", "38", "05", "04", "06", "2A", "2B", "64", "65", "31", "09", "66"];
+/// Sans le Paquet, on n'interroge une à une que les stations assez hautes pour avoir de la neige au sol.
+const MIN_STATION_ALT_M: i32 = 800;
 
 static MASSIFS: OnceLock<Vec<MassifDef>> = OnceLock::new();
 static STATE: LazyLock<RwLock<State>> = LazyLock::new(|| RwLock::new(State::new()));
@@ -688,7 +694,7 @@ async fn fetch_bulletins(http: &reqwest::Client, key: &str, ids: &[u16]) -> Resu
 }
 
 async fn fetch_station_list(http: &reqwest::Client, key: &str) -> Result<Option<HashMap<String, (String, Option<i32>)>>> {
-    let url = format!("{}/DPObs/v1/liste-stations", base());
+    let url = format!("{}/DPObs/v2/liste-stations", base());
     match get(http, key, &url).await? {
         Fetched::Body(body) => Ok(Some(parse_station_list(&String::from_utf8_lossy(&body)))),
         Fetched::Nothing => Ok(Some(HashMap::new())),
@@ -696,7 +702,23 @@ async fn fetch_station_list(http: &reqwest::Client, key: &str) -> Result<Option<
     }
 }
 
-async fn fetch_stations(http: &reqwest::Client, key: &str) -> Result<Option<Vec<SnowStation>>> {
+/// Les stations de montagne à interroger une à une (sans le Paquet) : départements des massifs, 800 m ou plus.
+/// Les identifiants commencent par le numéro du département (« 20 » pour la Corse).
+pub fn mountain_stations(names: &HashMap<String, (String, Option<i32>)>) -> Vec<String> {
+    let mut ids: Vec<String> = names
+        .iter()
+        .filter(|(id, (_, alt))| {
+            let department = id.get(..2).unwrap_or_default();
+            let mountain = DEPARTMENTS.contains(&department) || (department == "20" && DEPARTMENTS.contains(&"2A"));
+            mountain && alt.is_some_and(|a| a >= MIN_STATION_ALT_M)
+        })
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
+async fn fetch_stations(http: &reqwest::Client, key: &str, names: &HashMap<String, (String, Option<i32>)>) -> Result<Option<Vec<SnowStation>>> {
     let base = base();
     let mut all = Vec::new();
     for department in DEPARTMENTS {
@@ -710,6 +732,11 @@ async fn fetch_stations(http: &reqwest::Client, key: &str) -> Result<Option<Vec<
             Ok(Fetched::RateLimited) => return Ok(None),
             Err(error) => {
                 let text = format!("{error:#}");
+                // Le Paquet n'est pas accordé à cette clé : l'API Observation seule suffit, station par station.
+                if text.contains("clé Météo-France refusée") && all.is_empty() {
+                    tokio::time::sleep(PACE).await;
+                    return fetch_stations_one_by_one(http, key, names).await;
+                }
                 if text.contains("clé Météo-France refusée") || text.contains("plafond") {
                     return Err(error);
                 }
@@ -718,6 +745,29 @@ async fn fetch_stations(http: &reqwest::Client, key: &str) -> Result<Option<Vec<
         }
         tokio::time::sleep(PACE).await;
     }
+    Ok(Some(all))
+}
+
+async fn fetch_stations_one_by_one(http: &reqwest::Client, key: &str, names: &HashMap<String, (String, Option<i32>)>) -> Result<Option<Vec<SnowStation>>> {
+    let ids = mountain_stations(names);
+    if ids.is_empty() {
+        bail!("liste des stations Météo-France absente : relevé station par station impossible");
+    }
+    let base = base();
+    let mut all = Vec::new();
+    for id in &ids {
+        let url = format!("{base}/DPObs/v2/station/horaire?id_station={id}&format=json");
+        match get(http, key, &url).await? {
+            Fetched::Body(body) => match parse_observations(&body) {
+                Ok(mut stations) => all.append(&mut stations),
+                Err(error) => warn!(station = %id, "neige : observation illisible : {error:#}"),
+            },
+            Fetched::Nothing => {}
+            Fetched::RateLimited => return Ok(None),
+        }
+        tokio::time::sleep(PACE).await;
+    }
+    info!(interrogees = ids.len(), "neige : stations interrogées une à une (sans le Paquet Observation)");
     Ok(Some(all))
 }
 
@@ -840,7 +890,8 @@ pub async fn poll_forever(http: reqwest::Client, data_dir: PathBuf) {
                     }
                     tokio::time::sleep(PACE).await;
                 }
-                fetch_stations(&http, &key).await
+                let names = STATE.read().expect("verrou de la neige").names.clone();
+                fetch_stations(&http, &key, &names).await
             }
             .await;
             let now = Timestamp::now().as_second();
@@ -918,6 +969,21 @@ pub async fn bulletin_handler(UrlPath(id): UrlPath<u16>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stations_de_montagne_interrogees_une_a_une() {
+        let names = parse_station_list(
+            "Id_station;Id_omm;Nom_usuel;Latitude;Longitude;Altitude;Date_ouverture;Pack\n\
+             74056001;;CHAMONIX;45.93;6.88;1042;1990-01-01;ETENDU\n\
+             74010001;;ANNECY;45.9;6.1;448;1990-01-01;ETENDU\n\
+             20004002;;AJACCIO;41.9;8.8;5;1990-01-01;ETENDU\n\
+             20148001;;BASTELICA;42.0;9.0;1640;1990-01-01;RADOME\n\
+             75114001;;PARIS-MONTSOURIS;48.8;2.3;75;1990-01-01;ETENDU\n\
+             63113001;;PUY DE DOME;45.8;2.9;1415;1990-01-01;ETENDU\n",
+        );
+        // Chamonix et Bastelica (Corse) : assez hautes, dans un département de massif ; le puy de Dôme n'a pas de massif BRA.
+        assert_eq!(mountain_stations(&names), vec!["20148001".to_string(), "74056001".to_string()]);
+    }
 
     const MONT_BLANC: &str = include_str!("testdata/bra_mont_blanc.xml");
     const PAYS_BASQUE: &str = include_str!("testdata/bra_pays_basque.xml");
