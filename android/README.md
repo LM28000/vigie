@@ -46,3 +46,17 @@ L'app est publiée sur le canal **test interne** de la Play Console.
 ## Digital Asset Links
 
 `web/public/.well-known/assetlinks.json` doit contenir le paquet `eu.ducray.vigie` et l'empreinte SHA-256 de la **clé de signature de Google Play** (Play Console → Test et publication → Configuration → Intégrité de l'application). Le fichier doit être lisible sans connexion : application Cloudflare Access « Bypass » sur `vigie.du-cray.eu/.well-known/assetlinks.json`. Sans cela, l'app s'ouvre avec une barre d'adresse.
+
+Si la barre d'adresse reste affichée sur la carte, vérifier l'empreinte **réelle** de l'app installée depuis Play (celle notée dans la console peut être une autre ; c'est arrivé) : téléphone branché en débogage USB,
+
+```sh
+adb shell pm path --user 0 eu.ducray.vigie          # chemins des APK installés
+adb pull <chemin de base.apk> /tmp/vigie-base.apk
+/Users/Shared/bubblewrap-sdk/build-tools/36.1.0/apksigner verify --print-certs /tmp/vigie-base.apk | grep SHA-256
+```
+
+Ajouter l'empreinte (en majuscules, octets séparés par `:`) à `assetlinks.json` et à `fingerprints` dans `twa-manifest.json`, déployer, attendre que l'API de Google réponde `"linked": true` (voir [docs/deploiement.md](../docs/deploiement.md)), puis effacer les données de l'app sur le téléphone : Chrome garde en mémoire l'échec de la vérification.
+
+## Fiche Play Store
+
+Textes, réponses aux formulaires de la Console et visuels : [fiche-play/fiche.md](fiche-play/fiche.md). La politique de confidentialité est `web/public/confidentialite.html` (servie à `/confidentialite.html`, règle Access « Bypass » nécessaire). Restent à fournir : l'adresse de contact (`CONTACT_A_COMPLETER`) et un compte de test pour les examinateurs de Google.

@@ -2,6 +2,20 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Qualité de l'air : mesures horaires des stations
+
+- **Serveur** (`server/src/air_mesures.rs`, `GET /api/air/mesures`) : concentrations horaires mesurées par les stations officielles (NO₂, O₃, PM10, PM2.5, SO₂) d'après le flux « temps réel » E2 du LCSQA (Geod'air), un CSV par jour réécrit chaque heure ; relevé conditionnel (`If-None-Match`) toutes les 20 min, fichier de la veille une fois par jour ; valeurs invalides écartées, outre-mer écarté (heure locale). 24 h de série par station et par polluant, en colonnes (environ 160 Ko, 56 Ko en gzip, environ 450 stations).
+- **Coordonnées** : le flux n'en a pas ; elles sont extraites une fois du « Dataset D » XML du même jeu par `server/scripts/air_stations.py` vers `server/src/data/air_stations.tsv` (821 stations de métropole), à relancer une fois par an.
+- **Carte** (`web/src/modules/air.ts`) : réglage « Afficher » (indice et stations, indice seul, stations seules) et « Polluant des stations » (le pire, NO₂, O₃, PM10, PM2.5) ; point net cerné de blanc, coloré par le pire sous-indice avec la palette et les seuils ATMO 2021 (une valeur horaire comparée à des seuils journaliers : la fiche le dit), valeur écrite sous le point, mesure de plus de 3 h estompée. Fiche : niveau, valeur, type de station, tableau des polluants et courbe sur 24 h. Recherche par nom de station ou commune.
+- **Tests** : 10 tests Rust sur une fixture réelle, `web/scripts/airMesures.test.mjs` (seuils, fraîcheur).
+
+## 18 novembre 2026 — Android : fiche Play Store, confidentialité, signature
+
+- **TWA sur Google Play** (`eu.ducray.vigie`, canal test interne) : projet Bubblewrap dont seuls `android/twa-manifest.json` et `android/README.md` sont suivis ; signature hors de `bubblewrap build` (jarsigner et apksigner demandent le mot de passe sans l'afficher).
+- **Digital Asset Links** : la barre d'adresse restait affichée parce que l'empreinte notée n'était pas celle de la clé avec laquelle Play signe l'app. L'empreinte réelle a été lue sur l'APK installé (`adb pull` puis `apksigner verify --print-certs`) et ajoutée à `assetlinks.json` ; méthode dans `android/README.md`.
+- **Politique de confidentialité** `web/public/confidentialite.html`, écrite d'après le code (position jamais envoyée sauf « Surveiller autour de moi », arrondie à environ 1 km ; pas de journal d'accès côté serveur ; ni statistiques ni publicité ; tiers appelés par le navigateur), lien « Confidentialité » en bas du catalogue des couches.
+- **Fiche Play** (`android/fiche-play/`) : textes, réponses aux formulaires de la Console (sécurité des données, classification, public cible, accès à l'appli), six captures 1080×1920, image de présentation 1024×500, icône 512.
+
 ## 18 novembre 2026 — Application installable (PWA), prête pour une TWA
 
 - **Manifeste** `web/public/manifest.webmanifest` (« Vigie, la France en direct », `standalone`, `id` et `scope` `/`, couleurs de l'interface sombre) lié avec `crossorigin="use-credentials"` pour passer Cloudflare Access ; `viewport-fit=cover`, `theme-color`, balises iOS, marges des bords tenant compte des encoches en paysage.

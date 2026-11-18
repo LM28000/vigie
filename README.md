@@ -163,7 +163,7 @@ Deux idées structurent le code : **le temps est au cœur du système** (une hor
 
 ## Données et licences
 
-La carte affiche des données ouvertes de nombreuses sources, chacune avec sa licence : OpenStreetMap (ODbL), SNCF et Île-de-France Mobilités (ODbL), IGN (Licence Etalab 2.0), INSEE, ARCEP, ministère de l'Intérieur et ministère de la Culture (Licence Ouverte), DGFiP (DVF), ONISR, Shom, Météo-France via Open-Meteo, RainViewer, adsb.lol (ODbL), aisstream.io, CelesTrak, NASA FIRMS, Atmo France. Le crédit de chaque couche s'affiche dans le panneau des couches, et ceux du fond de carte en bas à droite de la carte.
+La carte affiche des données ouvertes de nombreuses sources, chacune avec sa licence : OpenStreetMap (ODbL), SNCF et Île-de-France Mobilités (ODbL), IGN (Licence Etalab 2.0), INSEE, ARCEP, ministère de l'Intérieur et ministère de la Culture (Licence Ouverte), DGFiP (DVF), ONISR, Shom, Météo-France via Open-Meteo, RainViewer, adsb.lol (ODbL), aisstream.io, CelesTrak, NASA FIRMS, Atmo France, LCSQA (Geod'air). Le crédit de chaque couche s'affiche dans le panneau des couches, et ceux du fond de carte en bas à droite de la carte.
 
 Deux conditions à connaître avant de réutiliser ou de déployer :
 
