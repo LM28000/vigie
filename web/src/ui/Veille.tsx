@@ -35,6 +35,7 @@ const TYPE_ICONS: Record<EventType, string> = {
   brouillage: 'brouillage-gps',
   avion: 'avions',
   train: 'trains',
+  avalanche: 'neige',
 };
 
 /** Vigilance et crues disent leur gravité par une couleur officielle ; le reste, par un mot. */
@@ -444,7 +445,7 @@ export function VeilleView({ manager, phone, onPicked, onClose }: VeilleViewProp
         {state.zones.length === 0 && !adding && (
           <p className="veille__intro">
             Choisissez un lieu (commune, département, cercle ou contour dessiné) : Vigie vous prévient ici quand il s’y passe quelque chose, vigilance orange ou rouge, crue, rivière en forte montée,
-            incendie, séisme ressenti, brouillage GPS, train supprimé ou très en retard.
+            incendie, séisme ressenti, risque d’avalanche fort, brouillage GPS, train supprimé ou très en retard.
           </p>
         )}
 

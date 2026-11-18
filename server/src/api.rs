@@ -102,6 +102,8 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/air", get(air))
         .route("/api/rivieres", get(|| async { crate::rivers::response() }))
         .route("/api/rivieres/{code}", get(crate::rivers::series_handler))
+        .route("/api/neige", get(|| async { crate::neige::response() }))
+        .route("/api/neige/{id}", get(crate::neige::bulletin_handler))
         .route("/api/satellites/starlink", get(|State(state): State<AppState>| async move { prepared(state.starlink(), "Starlink") }))
         .route("/api/vent", get(|State(state): State<AppState>| async move { prepared(state.wind(), "vent") }))
         // Une adresse d'API inconnue est une erreur, pas la page du site.

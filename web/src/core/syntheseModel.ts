@@ -60,6 +60,14 @@ export interface ApiSynthese {
     worst: Array<{ i: number; name: string; lon: number; lat: number; level: number }>;
     episodes: Array<{ zone: string; pol: string; level: number }>;
   } | null;
+  avalanches: {
+    issuedAt: number;
+    /** Massifs qui ont un bulletin en cours, dont ceux en risque 4 ou 5 et en risque 3. */
+    total: number;
+    highCount: number;
+    markedCount: number;
+    items: Array<{ id: number; name: string; lon: number; lat: number; risk: number; riskLow?: number; riskHigh?: number; altitude?: number }>;
+  } | null;
   trains: {
     feedAt: number;
     running: number;
@@ -119,7 +127,7 @@ export interface Row {
   action?: Action;
 }
 
-export type RubricId = 'vigilance' | 'orages' | 'crues' | 'rivieres' | 'incendies' | 'seismes' | 'air' | 'trains' | 'brouillage' | 'avions';
+export type RubricId = 'vigilance' | 'orages' | 'crues' | 'rivieres' | 'incendies' | 'seismes' | 'avalanches' | 'air' | 'trains' | 'brouillage' | 'avions';
 
 export interface Rubric {
   id: RubricId;
@@ -139,7 +147,7 @@ export interface Rubric {
 }
 
 /** L'ordre des rubriques à gravité égale. */
-const ORDER: RubricId[] = ['vigilance', 'orages', 'crues', 'rivieres', 'incendies', 'seismes', 'air', 'trains', 'brouillage', 'avions'];
+const ORDER: RubricId[] = ['vigilance', 'orages', 'crues', 'rivieres', 'incendies', 'seismes', 'avalanches', 'air', 'trains', 'brouillage', 'avions'];
 
 export interface Digest {
   /** Rubriques avec quelque chose de notable, les plus graves d'abord. */
@@ -560,6 +568,42 @@ function trainsRubric(data: NonNullable<ApiSynthese['trains']>): Rubric {
   };
 }
 
+/** Le libellé européen du risque d'avalanche : 1 faible, 2 limité, 3 marqué, 4 fort, 5 très fort. */
+const AVALANCHE_WORD: Record<number, string> = { 1: 'faible', 2: 'limité', 3: 'marqué', 4: 'fort', 5: 'très fort' };
+
+/**
+ * Risque d'avalanche (bulletins BRA de Météo-France, massifs des Alpes, des Pyrénées et de la Corse) : les massifs en risque 4 (fort)
+ * ou 5 (très fort). Le risque 3 (marqué) est courant en plein hiver : il est compté dans le résumé, pas cité en ligne. Hors saison
+ * (aucun bulletin en cours), la rubrique est calme et le dit.
+ */
+function avalanchesRubric(data: NonNullable<ApiSynthese['avalanches']>): Rubric {
+  const rows: Row[] = data.items.map((massif) => ({
+    key: `a-${massif.id}`,
+    title: `${massif.name} · risque ${massif.risk} sur 5, ${AVALANCHE_WORD[massif.risk] ?? ''}`,
+    detail:
+      massif.riskLow !== undefined && massif.riskHigh !== undefined && massif.altitude !== undefined && massif.riskLow !== massif.riskHigh
+        ? `Risque ${massif.riskLow} sous ${nf(massif.altitude)} m, ${massif.riskHigh} au-dessus`
+        : undefined,
+    action: { kind: 'object', moduleId: 'neige', selection: { id: massif.id }, lon: massif.lon, lat: massif.lat, zoom: 9 },
+  }));
+  const worst = Math.max(0, ...data.items.map((m) => m.risk));
+  const marked = data.markedCount > 0 ? `, ${plural(data.markedCount, 'massif')} en risque marqué (3)` : '';
+  return {
+    id: 'avalanches',
+    icon: 'neige',
+    title: 'Risque d’avalanche',
+    severity: data.highCount > 0 ? (worst >= 5 ? 4 : 3) : 0,
+    official: false,
+    summary: `${plural(data.highCount, 'massif')} en risque fort ou très fort (4 ou 5)${marked}`,
+    rows,
+    calm:
+      data.total === 0
+        ? 'Avalanches : pas de bulletin en cours (hors saison)'
+        : `Avalanches : aucun massif en risque 4 ou 5${marked}`,
+    more: { text: 'Voir tous les massifs (couche Neige et avalanches)', action: { kind: 'view', moduleId: 'neige', lon: 6.4, lat: 45.2, zoom: 6.8 } },
+  };
+}
+
 function jammingRubric(data: NonNullable<ApiSynthese['jamming']>): Rubric {
   const rows: Row[] = data.items.map((cell) => ({
     key: `j-${cell.lon}-${cell.lat}`,
@@ -616,6 +660,7 @@ export function buildDigest(api: ApiSynthese, quakes: SynthesisQuake[] | null, n
   add(api.fires, 'incendies', (data) => firesRubric(data, now));
   if (quakes) rubrics.push(quakesRubric(quakes, now));
   else unavailable.push('séismes');
+  add(api.avalanches, 'avalanches', avalanchesRubric);
   add(api.air, 'qualité de l’air', airRubric);
   add(api.trains, 'trains', trainsRubric);
   add(api.jamming, 'brouillage GPS', jammingRubric);

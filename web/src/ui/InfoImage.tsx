@@ -4,6 +4,8 @@ import { formatTime } from './format';
 
 /** Adresse de l'image avec un paramètre qui change à chaque rechargement (le navigateur ne réutilise pas la précédente). */
 function fresh(src: string, stamp: number): string {
+  // Une image donnée en adresse `data:` (rose des pentes) ne change pas : y ajouter un paramètre la casserait.
+  if (src.startsWith('data:')) return src;
   return `${src}${src.includes('?') ? '&' : '?'}_=${stamp}`;
 }
 

@@ -39,6 +39,8 @@ read -rsp "Mot de passe Atmo Data : " p && printf "ATMO_PASSWORD='%s'\n" "$p" >>
 read -rsp "Clé PRIM : " k && printf "IDFM_PRIM_API_KEY='%s'\n" "$k" >> .env && chmod 600 .env && unset k
 # Facultatif, webcams Windy de la couche « Caméras » : clé gratuite (api.windy.com/keys), saisie sans l'afficher.
 read -rsp "Clé Windy Webcams : " k && printf "WINDY_WEBCAMS_KEY='%s'\n" "$k" >> .env && chmod 600 .env && unset k
+# Facultatif, couche « Neige et avalanches » : clé du portail API Météo-France (portail-api.meteofrance.fr ; abonnements « BRA » et « Observation »).
+read -rsp "Clé Météo-France : " k && printf "METEOFRANCE_API_KEY='%s'\n" "$k" >> .env && chmod 600 .env && unset k
 docker compose up -d --build       # installer, ou mettre à jour après un git pull
 docker compose logs -f             # suivre les journaux
 ```
@@ -73,6 +75,7 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 | `AISSTREAM_API_KEY` | aucune | Clé [aisstream.io](https://aisstream.io) ; sans elle, la couche « Bateaux » est désactivée. |
 | `ATMO_USERNAME`, `ATMO_PASSWORD` | aucun | Compte Atmo Data ; sans eux, la couche « Qualité de l'air » est désactivée. |
 | `IDFM_PRIM_API_KEY` | aucune | Clé PRIM d'Île-de-France Mobilités ; sans elle, métro, RER, Transilien et tramways d'Île-de-France sont ignorés. |
+| `METEOFRANCE_API_KEY` | aucune | Clé du [portail API Météo-France](https://portail-api.meteofrance.fr) (API « Données Publiques BRA » et « Données Publiques Observation »), envoyée dans l'en-tête `apikey` ; sans elle, la couche « Neige et avalanches » dit « clé Météo-France absente » (`/api/neige` répond 503) et le serveur ne fait aucune requête vers Météo-France. Facultatifs, pour les essais : `METEOFRANCE_MAX_REQUETES` (plafond de requêtes par processus), `METEOFRANCE_API_BASE` (autre adresse de l'API, pour rejouer des bulletins). La clé ne sort jamais du serveur. |
 | `WINDY_WEBCAMS_KEY` | aucune | Clé [Windy Webcams API](https://api.windy.com/keys) (niveau gratuit) ; sans elle, les webcams Windy de la couche « Caméras » sont désactivées (la fiche et la légende le disent), les caméras Criter et la vidéoprotection d'OpenStreetMap restent disponibles. La clé ne sort jamais du serveur. |
 
 ### Île-de-France (PRIM)
@@ -132,7 +135,7 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 | `DATA_PATH` | `./data` | Dossier monté sur `/data`. |
 | `ARCHIVE_PATH` | `./archive` | Dossier monté sur `/archive`. |
 
-`compose.yaml` transmet au conteneur `AISSTREAM_API_KEY`, `ATMO_USERNAME`, `ATMO_PASSWORD`, `IDFM_PRIM_API_KEY`, `WINDY_WEBCAMS_KEY`, `IDFM_MODES`, `IDFM_INTERVALLE_S` et `IDFM_MEMOIRE_MO`. Les autres réglages du serveur (`TUILES_*`, `ISO_*`, `HISTORIQUE_JOURS`…) n'y sont pas déclarés : pour les changer dans Docker, il faut les ajouter à la section `environment` de `compose.yaml`.
+`compose.yaml` transmet au conteneur `AISSTREAM_API_KEY`, `ATMO_USERNAME`, `ATMO_PASSWORD`, `IDFM_PRIM_API_KEY`, `WINDY_WEBCAMS_KEY`, `METEOFRANCE_API_KEY`, `IDFM_MODES`, `IDFM_INTERVALLE_S` et `IDFM_MEMOIRE_MO`. Les autres réglages du serveur (`TUILES_*`, `ISO_*`, `HISTORIQUE_JOURS`…) n'y sont pas déclarés : pour les changer dans Docker, il faut les ajouter à la section `environment` de `compose.yaml`.
 
 ### Côté site (développement seulement)
 

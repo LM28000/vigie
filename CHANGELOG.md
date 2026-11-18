@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Neige et avalanches, marées dans les rivières
+
+- **Neige et avalanches** (Environnement) : les 35 massifs des Alpes, des Pyrénées et de la Corse colorés selon le risque d'avalanche du bulletin de Météo-France (échelle européenne 1 à 5, chiffre sur chaque massif), stations de hauteur de neige, fiche par massif (risque par altitude, rose des pentes dangereuses, enneigement, neige fraîche, textes, validité, liens officiels), légende, mode nuit, téléphone, recherche par nom de massif. Hors saison : « pas de bulletin en cours ». Sans clé : « clé Météo-France absente ».
+- **Serveur** : `server/src/neige.rs`, API du portail Météo-France (`METEOFRANCE_API_KEY`) : bulletins BRA deux fois par jour au plus, observations horaires par département, requêtes espacées, persistance dans `DATA_DIR/neige/`. Contours des massifs : Météo-France, Licence Ouverte 2.0.
+- **Intégrations** : rubrique « Risque d'avalanche » dans « Aujourd'hui » (massifs en risque 4 ou 5) et type d'événement dans la veille.
+- **Rivières** : les stations soumises à la marée (marégraphes, estuaires) sont gardées mais présentées à part (gris neutre, vague), sans tendance de montée ni vigilance ; la fiche et la légende l'expliquent. La règle `is_tidal` a été resserrée au passage : sur le relevé réel du 18 novembre (2 461 stations) l'ancienne en marquait 101, dont 60 à tort (sources, lacs, affluents d'estuaire comme l'Eure ou la Sèvre Nantaise) ; elle en marque 53, toutes plausibles.
+
 ## 17 novembre 2026 — Zones surveillées (veille) et orages
 
 - **Veille** : jusqu'à 12 zones (cercle, polygone, commune, département) ; Vigie prévient dans l'application quand il s'y passe quelque chose (vigilance orange ou rouge, crue, rivière en forte montée, incendie, séisme ressenti, brouillage GPS, avion militaire, train supprimé ou très en retard à une gare de la zone). Avis discret, liste des alertes, pastille, compteur dans le titre, son facultatif ; `Notification` seulement en contexte sûr (le site est en HTTP). Dédoublonnage par identifiant d'événement, zones gardées dans le navigateur et dans l'adresse (`veille=`), version téléphone (onglet de la feuille).

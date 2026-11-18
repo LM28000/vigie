@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use super::*;
 
 /// Les types que le serveur sait évaluer (le séisme est évalué par le site).
-pub const TYPES: [&str; 7] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train"];
+pub const TYPES: [&str; 8] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train", "avalanche"];
 
 const MAX_ZONES: usize = 12;
 const MAX_VERTICES: usize = 500;
@@ -350,7 +350,7 @@ fn rising_events(body: &Option<Bytes>, now: i64) -> Option<Vec<Located>> {
     let events = input
         .stations
         .iter()
-        .filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM) && !rivers::is_tidal(&s.name, s.lon, s.lat))
+        .filter(|s| now - s.t < RIVER_STALE_S && s.d.is_some_and(|d| d >= RIVER_FAST_MM) && !s.tidal && !rivers::is_tidal(&s.name, s.lon, s.lat))
         .map(|s| {
             let rise = s.d.unwrap_or(0);
             let height = format!("{:.2}", f64::from(s.h) / 1000.0).replace('.', ",");
@@ -398,6 +398,38 @@ fn fire_events(body: &Option<Bytes>, now: i64) -> Option<Vec<Located>> {
                 }
                 .located(None),
             )
+        })
+        .collect();
+    Some(events)
+}
+
+/// Risque d'avalanche fort (4) ou très fort (5) sur un massif : le risque marqué (3) est quotidien en plein hiver. Le massif est
+/// testé par son rectangle englobant (la zone le touche), la fiche s'ouvre sur le massif. Le risque est dans l'identifiant : un
+/// massif qui passe de 4 à 5 est signalé de nouveau.
+fn avalanche_events(warnings: &Option<Vec<crate::neige::Warning>>) -> Option<Vec<Located>> {
+    let events = warnings
+        .as_ref()?
+        .iter()
+        .filter(|w| w.risk >= 4)
+        .map(|w| {
+            let band = match (w.risk_low, w.risk_high, w.altitude) {
+                (Some(low), Some(high), Some(alt)) if low != high => format!(" · risque {low} sous {alt} m, {high} au-dessus"),
+                _ => String::new(),
+            };
+            Point {
+                kind: "avalanche",
+                id: format!("avalanche:{}:{}", w.id, w.risk),
+                severity: if w.risk >= 5 { 4 } else { 3 },
+                title: format!("Risque d'avalanche {}", if w.risk >= 5 { "très fort (5/5)" } else { "fort (4/5)" }),
+                detail: format!("Massif {}{band}", w.name),
+                lon: w.lon,
+                lat: w.lat,
+                time: Some(w.issued),
+                module: "neige",
+                selection: json!({ "id": w.id }),
+                zoom: 9.0,
+            }
+            .located(Some(w.bounds))
         })
         .collect();
     Some(events)
@@ -564,6 +596,7 @@ pub fn build_index(inputs: &Inputs, trains: Option<Vec<Located>>, now: i64) -> I
     add("incendie", fire_events(&inputs.fires, now));
     add("brouillage", jamming_events(&inputs.jamming));
     add("avion", plane_events(&inputs.planes));
+    add("avalanche", avalanche_events(&inputs.avalanches));
     add("train", trains);
     index
 }
@@ -621,6 +654,7 @@ async fn current_index(state: AppState) -> Result<Arc<Index>, String> {
             planes: state.planes(),
             jamming: state.jamming(),
             air: None,
+            avalanches: crate::neige::warnings(now),
         };
         let trains = state.realtime().map(|realtime| train_events(&state.network(), &realtime, now));
         build_index(&inputs, trains, now)
@@ -764,6 +798,51 @@ mod tests {
         let fire = found.iter().find(|e| e.kind == "incendie").unwrap();
         assert_eq!(fire.selection["key"], format!("NOAA-20|{}|2.01|47.01", NOW - 3600));
         assert_eq!(fire.detail, "35 MW · 2 détections");
+    }
+
+    #[test]
+    fn tidal_stations_flagged_by_the_server_never_raise_a_rise_or_a_flood_alert() {
+        // Le serveur n'envoie ni `d` ni `vig` pour une station soumise à la marée ; même si un ancien serveur les envoyait, le drapeau l'emporte.
+        let rivers = format!(
+            r#"{{"updatedAt":{NOW},"stations":[
+              {{"id":"estuaire","name":"Station A","lon":2.0,"lat":47.0,"h":2240,"t":{t},"d":3050,"vig":3,"vigName":"Basse Seine","tidal":true}},
+              {{"id":"vraie","name":"Station B","lon":2.0,"lat":47.0,"h":1500,"t":{t},"d":450}}
+            ]}}"#,
+            t = NOW - 600
+        );
+        let rising = rising_events(&bytes(&rivers), NOW).unwrap();
+        assert_eq!(rising.iter().map(|l| l.event.id.as_str()).collect::<Vec<_>>(), vec!["montee:vraie"]);
+    }
+
+    #[test]
+    fn strong_avalanche_risk_is_reported_for_a_zone_touching_the_massif_and_changes_id_with_the_risk() {
+        let warning = |risk| crate::neige::Warning {
+            id: 3,
+            name: "Mont-Blanc".into(),
+            lon: 2.0,
+            lat: 47.0,
+            bounds: [1.9, 46.9, 2.1, 47.1],
+            risk,
+            risk_low: Some(3),
+            risk_high: Some(risk),
+            altitude: Some(2700),
+            issued: NOW - 3600,
+            valid_until: NOW + 80_000,
+        };
+        assert!(avalanche_events(&None).is_none());
+        let marked = avalanche_events(&Some(vec![warning(3)])).unwrap();
+        assert!(marked.is_empty(), "le risque marqué est quotidien : pas d'alerte");
+        let located = avalanche_events(&Some(vec![warning(4)])).unwrap();
+        let index = Index { generated_at: NOW, located, ..Index::default() };
+        let found = evaluate(&index, &zone("a", &SQUARE, &[], &["avalanche"]));
+        assert_eq!(found.len(), 1);
+        let event = &found[0];
+        assert_eq!((event.id.as_str(), event.severity, event.module), ("avalanche:3:4", 3, "neige"));
+        assert_eq!(event.detail, "Massif Mont-Blanc · risque 3 sous 2700 m, 4 au-dessus");
+        assert_eq!(event.selection["id"], 3);
+        let very = avalanche_events(&Some(vec![warning(5)])).unwrap();
+        assert_eq!((very[0].event.id.as_str(), very[0].event.severity), ("avalanche:3:5", 4));
+        assert!(evaluate(&Index { generated_at: NOW, located: very, ..Index::default() }, &zone("b", &SQUARE, &[], &["train"])).is_empty());
     }
 
     #[test]

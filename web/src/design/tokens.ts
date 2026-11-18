@@ -71,6 +71,16 @@ export const STATUS = {
   ink: '#161a26',
 } as const;
 
+/**
+ * Échelle européenne du risque d'avalanche (EAWS), de 1 faible à 5 très fort, dans ses teintes conventionnelles (vert, jaune,
+ * orange, rouge, rouge sombre) ajustées pour la lisibilité : ordre de teinte et de clarté monotone, les mêmes jour et nuit (aplat
+ * translucide sur le fond de carte, contour sombre). Le risque n'est jamais dit par la couleur seule : chiffre et libellé
+ * l'accompagnent partout (pastille sur la carte, légende, fiche).
+ */
+export const AVALANCHE = ['#8cc84b', '#f2d94a', '#f29a2e', '#d9262c', '#5b0a14'] as const;
+/** Neige au sol (hauteur mesurée aux stations) : bleu glacier. */
+export const NEIGE_SOL = '#2b78c2';
+
 /** Marées : remplissage des jauges et courbe des marégraphes. */
 export const MARINE = '#1d6fb8';
 
