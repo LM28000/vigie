@@ -271,6 +271,7 @@ interface Detail {
   address: string;
   price: number;
   priceText: string;
+  phone?: string;
   description: string;
   url: string;
   source: string;
@@ -753,6 +754,7 @@ export const evenements = defineModule<EventsData>({
     if (where) fields.push(['Lieu', where]);
     const price = d ? [d.price === 1 ? 'Gratuit' : d.price === 3 ? 'Gratuit sous conditions' : d.price === 2 ? 'Payant' : '', d.priceText].filter(Boolean).join(' · ') : isFree(e) ? 'Gratuit' : (e.flags & 4) !== 0 ? 'Payant' : '';
     if (price) fields.push(['Tarif', price]);
+    if (d?.phone) fields.push(['Téléphone', d.phone]);
     fields.push(['Catégorie', category.short]);
     if (d) fields.push(['Source', d.source], ['Licence', d.licence]);
     const when = whenFigure(e, time);

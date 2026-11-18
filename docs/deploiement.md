@@ -94,7 +94,8 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 | `TRANSPORTS_ESTIMES` | actif | `non` désactive les positions estimées d'après les horaires. |
 | `CESIUM_ION_TOKEN` | aucun | Jeton Cesium ion de la vue photoréaliste ; sans lui, le réglage est indisponible. Le navigateur ne le voit jamais : il demande `GET /api/photoreal/endpoint`, le serveur interroge Cesium ion et ne transmet qu'une adresse de tuiles à durée limitée. |
 | `TRANSPORTS_DECALAGE_S` | `0` | Décale l'horloge (test hors du direct ; le temps réel est alors ignoré). |
-| `DATATOURISME_FLUX_URL` | aucun | Adresse de téléchargement du flux DATAtourisme de l'exploitant (couche « Événements »). **Secrète** : elle contient une clé (`chmod 600 .env`, entre apostrophes) ; le serveur la lit sans jamais la journaliser ni l'envoyer au navigateur. Sans elle, l'export CSV public « fêtes et manifestations » de data.gouv.fr est lu (sans clé, sans horaires). Étapes de création du flux : [couches.md](couches.md#événements--sources-et-choix). |
+| `DATATOURISME_API_KEY` | aucune | Clé de l'API DATAtourisme v1 de l'exploitant (couche « Événements » ; clé demandée sur <https://www.datatourisme.fr/utiliser-les-donnees>). **Secrète** (`chmod 600 .env`, entre apostrophes) : le serveur l'envoie seulement à l'API, dans l'en-tête `X-API-Key`, sans jamais la journaliser ni la donner au navigateur. Sans elle, ou quand l'API échoue et que le relevé précédent a plus de 48 h, l'export CSV public « fêtes et manifestations » de data.gouv.fr est lu (sans clé, sans horaires ni tarifs). Une lecture complète par jour (quelques centaines de requêtes ; quota de l'API : 1 000 par heure). Détails : [couches.md](couches.md#événements--sources-et-choix). |
+| `DATATOURISME_API_URL` | `https://api.datatourisme.fr/v1` | Adresse de base de l'API DATAtourisme, pour un essai sur un autre serveur ; à laisser vide en production. |
 | `EVENEMENTS_SOURCES` | `paris,datatourisme,openagenda` | Sources d'événements relevées (liste séparée par des virgules). |
 
 ### Isochrones
@@ -137,7 +138,7 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 | `DATA_PATH` | `./data` | Dossier monté sur `/data`. |
 | `ARCHIVE_PATH` | `./archive` | Dossier monté sur `/archive`. |
 
-`compose.yaml` transmet au conteneur `AISSTREAM_API_KEY`, `ATMO_USERNAME`, `ATMO_PASSWORD`, `IDFM_PRIM_API_KEY`, `WINDY_WEBCAMS_KEY`, `METEOFRANCE_API_KEY`, `DATATOURISME_FLUX_URL`, `EVENEMENTS_SOURCES`, `IDFM_MODES`, `IDFM_INTERVALLE_S` et `IDFM_MEMOIRE_MO`. Les autres réglages du serveur (`TUILES_*`, `ISO_*`, `HISTORIQUE_JOURS`…) n'y sont pas déclarés : pour les changer dans Docker, il faut les ajouter à la section `environment` de `compose.yaml`.
+`compose.yaml` transmet au conteneur `AISSTREAM_API_KEY`, `ATMO_USERNAME`, `ATMO_PASSWORD`, `IDFM_PRIM_API_KEY`, `WINDY_WEBCAMS_KEY`, `METEOFRANCE_API_KEY`, `DATATOURISME_API_KEY`, `DATATOURISME_API_URL`, `EVENEMENTS_SOURCES`, `IDFM_MODES`, `IDFM_INTERVALLE_S` et `IDFM_MEMOIRE_MO`. Les autres réglages du serveur (`TUILES_*`, `ISO_*`, `HISTORIQUE_JOURS`…) n'y sont pas déclarés : pour les changer dans Docker, il faut les ajouter à la section `environment` de `compose.yaml`.
 
 ### Côté site (développement seulement)
 
