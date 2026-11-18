@@ -7,7 +7,7 @@ Seul `twa-manifest.json` est suivi par git. Le projet Gradle (`app/`, `gradle/`,
 ## Outils (Mac)
 
 - Bubblewrap installé dans `~/.local/bubblewrap` (`~/.local/bubblewrap/node_modules/.bin/bubblewrap`).
-- `~/.bubblewrap/config.json` : JDK 17 (`/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk`, Bubblewrap n'accepte que la 17) et un SDK `~/.local/bubblewrap/sdk` fait de liens vers `/Users/Shared/Android/sdk`, plus `tools` → `cmdline-tools/latest` (Bubblewrap exige ce dossier).
+- `~/.bubblewrap/config.json` : JDK 17 (`/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk`, Bubblewrap n'accepte que la 17) et un SDK `/Users/Shared/bubblewrap-sdk` (chemin sans espace : Bubblewrap ne met pas de guillemets autour d'apksigner) fait de liens vers `/Users/Shared/Android/sdk`, plus `tools` → `cmdline-tools/latest` (Bubblewrap exige ce dossier).
 
 ## Régénérer le projet
 
