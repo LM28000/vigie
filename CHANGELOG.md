@@ -2,6 +2,14 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Recherche : couches chargées à la demande
+
+- **Problème** : « webcam chamonix », « borne ionity », « vélib bastille » ne donnaient rien tant que la couche n'avait pas été ouverte (les fournisseurs ne lisent que les données déjà chargées).
+- **`ModuleManager.prefetch(id)`** : charge les données d'un module sans l'afficher ni armer de rafraîchissement, une seule fois (chargement partagé s'il est en cours, aucun doublon si la couche s'ouvre entre-temps), abonnés prévenus à l'arrivée ; rejette en cas d'échec sans mettre la couche masquée en erreur.
+- **Mots-clés** (`web/src/search/prefetch.ts`) : webcams, bornes, vélos en libre-service, parkings, monuments, actualité locale, rivières, marées, Vigicrues. La barre précharge au premier mot reconnu (une fois par module, nouvel essai après 30 s en cas d'échec), affiche « Chargement des webcams… » ou « Webcams indisponibles », puis relance la recherche. Aucun chargement sans mot explicite.
+- **Bornes** : « borne » et « recharge » ne comptent plus comme des mots à trouver (« borne ionity » se cherche comme « ionity »).
+- **Tests** : `web/scripts/prefetch.test.mjs`.
+
 ## 18 novembre 2026 — Recherche : carburants et objets nommés
 
 - **Audit** : la recherche ne connaissait ni les stations-service (« e85 », « sp95 », « gazole » ne donnaient rien, ou seulement un réglage de couche), ni les stations de mesure des rivières, tronçons Vigicrues, marégraphes, monuments, satellites, qualité de l'air par commune, vigilance par département, séismes.

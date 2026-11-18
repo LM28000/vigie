@@ -318,3 +318,8 @@ kbd {
     animation: none;
   }
 }
+
+.search__note--compact {
+  padding-block: var(--space-3);
+  font-size: 12px;
+}

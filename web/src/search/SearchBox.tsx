@@ -9,9 +9,11 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ModuleManager } from '../core/moduleManager';
 import { useModuleStates } from '../ui/hooks';
+import { dataOf } from './access';
 import { isLiveWord, parseWhen } from './dates';
 import { arrange, MIN_QUERY_LENGTH, searchLocal, warmIndexes } from './engine';
 import { fold } from './normalize';
+import { prefetchRules } from './prefetch';
 import { replayResult, searchPlaces, type PlaceResult } from './places';
 import { addRecent, clearRecents, readRecents, type Recent } from './recents';
 import { KIND_LABELS, type Kind, type SearchResult } from './types';
@@ -24,6 +26,9 @@ const PLACES_DELAY_MS = 200;
 const PLACES_MIN_LENGTH = 3;
 /** Un lieu au moins aussi bien classé : on propose de le revoir hier. */
 const REPLAY_MIN_SCORE = 280;
+
+/** Après un échec de préchargement, délai avant de retenter (le même mot retapé relance). */
+const PREFETCH_RETRY_MS = 30_000;
 
 const EXAMPLES = ['Lyon', 'Part-Dieu', 'pluie', 'demain 8h', 'direct', 'relief'];
 
@@ -57,6 +62,27 @@ export function SearchBox({ manager }: { manager: ModuleManager }) {
     const handle = idle(() => warmIndexes(manager));
     return () => cancel(handle);
   }, [manager, states]);
+
+  // Couches pas encore chargées que la requête désigne par un mot (« webcam », « borne », « vélib ») : on les charge
+  // une fois, sans les afficher ; l'arrivée des données change `states`, ce qui relance la recherche ci-dessous.
+  const [prefetchState, setPrefetchState] = useState<Record<string, 'loading' | 'error'>>({});
+  const prefetchAsked = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (!open) return;
+    for (const rule of prefetchRules(query)) {
+      if (dataOf(manager, rule.module) !== undefined) continue;
+      const asked = prefetchAsked.current.get(rule.module);
+      if (asked !== undefined && Date.now() - asked < PREFETCH_RETRY_MS) continue;
+      prefetchAsked.current.set(rule.module, Date.now());
+      setPrefetchState((now) => ({ ...now, [rule.module]: 'loading' }));
+      manager
+        .prefetch(rule.module)
+        .then(() =>
+          setPrefetchState(({ [rule.module]: _, ...rest }) => (dataOf(manager, rule.module) === undefined ? { ...rest, [rule.module]: 'error' } : rest)),
+        )
+        .catch(() => setPrefetchState((now) => ({ ...now, [rule.module]: 'error' })));
+    }
+  }, [manager, query, open]);
 
   // Recherche locale, décalée de quelques millisecondes pendant la frappe.
   useEffect(() => {
@@ -156,6 +182,13 @@ export function SearchBox({ manager }: { manager: ModuleManager }) {
       })),
     [recents],
   );
+
+  // Lignes discrètes pour les couches en cours de chargement ou indisponibles (seulement celles que la requête désigne).
+  const prefetchNotes = typed
+    ? prefetchRules(query)
+        .filter((rule) => dataOf(manager, rule.module) === undefined && prefetchState[rule.module])
+        .map((rule) => ({ module: rule.module, text: prefetchState[rule.module] === 'error' ? rule.unavailable : `Chargement ${rule.loading}…`, warn: prefetchState[rule.module] === 'error' }))
+    : [];
 
   const rows: SearchResult[] = typed ? groups.flatMap((g) => g.results) : query.trim() ? [] : recentRows;
   const activeIndex = Math.min(active, rows.length - 1);
@@ -349,7 +382,12 @@ export function SearchBox({ manager }: { manager: ModuleManager }) {
             ) : null}
           </div>
 
-          {typed && rows.length === 0 && (
+          {prefetchNotes.map((note) => (
+            <p key={note.module} className={`search__note search__note--compact${note.warn ? ' search__note--warn' : ''}`}>
+              {note.text}
+            </p>
+          ))}
+          {typed && rows.length === 0 && prefetchNotes.length === 0 && (
             <p className="search__note">{placesState === 'loading' ? 'Recherche en cours…' : `Aucun résultat pour « ${query.trim()} ».`}</p>
           )}
           {typed && placesState === 'error' && (
