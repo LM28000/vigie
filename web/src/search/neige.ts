@@ -1,4 +1,7 @@
-/** Massifs de montagne : par nom (« Mont-Blanc », « Vanoise », « Haute-Bigorre »), « avalanche » ou « risque » pour tous. */
+/**
+ * Massifs de montagne : par nom (« Mont-Blanc », « Vanoise », « Haute-Bigorre »), « avalanche » ou « risque » pour tous ; et stations de
+ * mesure de la neige par leur nom (« Écrins », « Bellecôte », « nivôse »), « neige » ne montrant que celles qui ont de la neige au sol.
+ */
 import massifsGeo from '../data/massifs_bra.json';
 import type { NeigeData } from '../modules/neige';
 import { dataOf, openObject, shownBonus } from './access';
@@ -39,7 +42,26 @@ export const neigeProvider: Provider = {
       const match = matchScore(entry.text, query);
       if (match > 0) top.push(rank(entry.text, query, match) + bonus, entry);
     }
-    return top.result().map(({ score, item: m }): SearchResult => {
+    const stations = new TopK<NeigeData['stations'][number]>(MAX_RESULTS);
+    for (const st of data?.stations ?? []) {
+      const text = pad(`station ${st.name} ${st.alt ?? ''} m ${st.cm > 0 ? 'neige enneigement' : ''} nivose`);
+      const match = matchScore(text, query);
+      if (match > 0) stations.push(rank(text, query, match) + bonus + Math.min(st.cm, 200) / 20, st);
+    }
+    const found = stations.result().map(({ score, item: st }): SearchResult => {
+      const old = now - st.t * 1000 > 6 * 3600_000;
+      return {
+        key: `station-neige:${st.id}`,
+        kind: 'massif',
+        title: st.name,
+        subtitle: `Station de neige${st.alt !== undefined ? ` · ${st.alt} m` : ''}`,
+        live: st.cm > 0 ? `${st.cm} cm de neige${old ? ' (ancien)' : ''}` : 'pas de neige',
+        at: st,
+        score,
+        run: () => openObject(ctx.manager, MODULE, { st: st.id }, { fallback: st, zoom: 11 }),
+      };
+    });
+    const massifs = top.result().map(({ score, item: m }): SearchResult => {
       const bulletin = data?.byMassif.get(m.id)?.b;
       const risk = bulletin && now <= bulletin.validUntil * 1000 + 6 * 3600_000 ? bulletin.risk : 0;
       return {
@@ -54,5 +76,6 @@ export const neigeProvider: Provider = {
         run: () => openObject(ctx.manager, MODULE, { id: m.id }, { fallback: m, zoom: 9 }),
       };
     });
+    return [...massifs, ...found];
   },
 };

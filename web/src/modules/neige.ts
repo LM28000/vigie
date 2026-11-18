@@ -7,7 +7,9 @@
  *   contour sombre, et une pastille avec **le chiffre** au centre du massif. La couleur ne porte jamais seule l'information : le
  *   chiffre est sur la carte, et le libellé (« marqué ») dans la légende et la fiche. Contours : fichier « Metadata massifs » de
  *   Météo-France (Licence Ouverte 2.0), embarqué (`src/data/massifs_bra.json`).
- * - **Stations de neige** : un point par station qui mesure la hauteur de neige au sol, avec sa valeur en centimètres.
+ * - **Stations de neige** : un point par station qui mesure la hauteur de neige au sol, de rose clair à foncé selon la hauteur
+ *   (quatre classes), avec sa valeur en centimètres (étiquettes selon le zoom : les plus fortes hauteurs d'abord). À 0 cm, un petit
+ *   rond gris sans étiquette, visible de plus près. Mesure de plus de 6 h : estompée.
  * - **Fiche d'un massif** : risque, risque par altitude et altitude de transition, rose des pentes dangereuses, évolution,
  *   enneigement, neige fraîche, textes du bulletin, validité, liens vers le bulletin officiel.
  * - **Hors saison** (les bulletins paraissent de novembre à mai environ) : les massifs sont là, grisés, « pas de bulletin en
@@ -16,7 +18,7 @@
  *
  * La couche est en direct seulement : le serveur ne garde pas d'historique des bulletins.
  */
-import { AVALANCHE, NEIGE_SOL, STATUS } from '../design/tokens';
+import { AVALANCHE, hexToRgb, NEIGE_NULLE, NEIGE_SOL, NEIGE_SOL_SEUILS, STATUS } from '../design/tokens';
 import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { GeoJSONSource, Map as MapLibreMap } from 'maplibre-gl';
 import { measuredStatus, plainStatus, scheduledStatus } from '../core/infoStatus';
@@ -25,7 +27,7 @@ import { ModuleManager } from '../core/moduleManager';
 import { firstSymbolLayerId } from '../map/baseMap';
 import { declutter, halfZoomBreaks, zoomBand } from '../map/declutter';
 import { OVER_MAP } from '../map/parameters';
-import { formatDateTime, parisParts } from '../ui/format';
+import { formatDateTime, formatRelative, parisParts } from '../ui/format';
 import { KEY, selectionRing, zoomRamp } from './symbols';
 import { addSelectionRing, selectionRingIds, selectionRingLayers, setSelectionRingFilter } from './statusColors';
 import massifsGeo from '../data/massifs_bra.json';
@@ -175,22 +177,43 @@ function swatch(level: number): string {
   return url;
 }
 
-let stationSwatch: string | undefined;
-function snowSwatch(): string {
-  if (stationSwatch) return stationSwatch;
+/** Classe de couleur d'une hauteur de neige (0 : 0 cm, pas de couleur de rampe). */
+function snowClass(cm: number): number {
+  let k = -1;
+  NEIGE_SOL_SEUILS.forEach((min, i) => {
+    if (cm >= min) k = i;
+  });
+  return k;
+}
+
+const snowSwatches = new Map<string, string>();
+/** Point de station pour la légende : plein de la couleur de la classe, ou creux et gris (0 cm), estompé si `faded`. */
+function snowSwatch(cls: number, faded = false): string {
+  const key = `${cls}${faded ? 'f' : ''}`;
+  const cached = snowSwatches.get(key);
+  if (cached) return cached;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 28;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
+  ctx.globalAlpha = faded ? 0.45 : 1;
+  const radius = cls < 0 ? 5 : 8;
+  if (cls >= 0) {
+    ctx.beginPath();
+    ctx.arc(14, 14, radius + 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  }
   ctx.beginPath();
-  ctx.arc(14, 14, 8, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
+  ctx.arc(14, 14, radius, 0, Math.PI * 2);
+  ctx.fillStyle = cls >= 0 ? NEIGE_SOL[cls]! : 'rgba(255,255,255,0.85)';
   ctx.fill();
-  ctx.lineWidth = 3.5;
-  ctx.strokeStyle = NEIGE_SOL;
+  ctx.lineWidth = cls >= 0 ? 1.6 : 1.8;
+  ctx.strokeStyle = cls >= 0 ? STATUS.ink : NEIGE_NULLE;
   ctx.stroke();
-  stationSwatch = canvas.toDataURL();
-  return stationSwatch;
+  const url = canvas.toDataURL();
+  snowSwatches.set(key, url);
+  return url;
 }
 
 // --- Rose des pentes dangereuses (SVG) ---
@@ -299,6 +322,10 @@ interface Badge {
 
 const NAME_BOX_PX = { width: 150, height: 28 };
 const STATION_BOX_PX = { width: 72, height: 24 };
+/** Hauteur minimale (cm) d'une station étiquetée selon le zoom : les fortes hauteurs d'abord, toutes celles qui ont de la neige ensuite. */
+function labelFloor(zoom: number): number {
+  return zoom >= 8.5 ? 1 : zoom >= 7 ? 30 : Infinity;
+}
 
 let badgeCache: { data: NeigeData; step: number; badges: Badge[] } | undefined;
 function badgesOf(data: NeigeData, step: number): Badge[] {
@@ -318,7 +345,9 @@ function labelled(badges: Badge[], stations: SnowStation[], zoom: number) {
       band,
       stationSource: stations,
       names: zoom >= 7 ? declutter(badges, zoom, { lon: (b) => b.massif.lon, lat: (b) => b.massif.lat, rank: (b) => -b.risk, box: NAME_BOX_PX }) : [],
-      stations: zoom >= 8.5 ? declutter(stations, zoom, { lon: (s) => s.lon, lat: (s) => s.lat, rank: (s) => -s.cm, box: STATION_BOX_PX }) : [],
+      stations: Number.isFinite(labelFloor(zoom))
+        ? declutter(stations.filter((s) => s.cm >= labelFloor(zoom)), zoom, { lon: (s) => s.lon, lat: (s) => s.lat, rank: (s) => -s.cm, box: STATION_BOX_PX })
+        : [],
     };
   }
   return labelCache;
@@ -368,7 +397,12 @@ export const neige = defineModule<NeigeData>({
     if (data?.unavailable) return [];
     const items: LegendItem[] = [5, 4, 3, 2, 1].map((level) => ({ color: AVALANCHE[level - 1]!, icon: swatch(level), label: `Risque ${level} sur 5 : ${WORD[level]}${level >= 4 ? ' (pastille blanche sur fond foncé)' : ''}` }));
     items.push({ color: '#8a8f9c', icon: swatch(0), label: 'Massif sans bulletin en cours (hors saison)' });
-    items.push({ color: NEIGE_SOL, icon: snowSwatch(), label: 'Station : hauteur de neige au sol (cm)' });
+    if (!data?.stationsError) {
+      const labels = ['70 cm et plus', '30 à 69 cm', '10 à 29 cm', '1 à 9 cm'];
+      for (const cls of [3, 2, 1, 0]) items.push({ color: NEIGE_SOL[cls]!, icon: snowSwatch(cls), label: `Station : ${labels[3 - cls]} de neige au sol` });
+      items.push({ color: NEIGE_NULLE, icon: snowSwatch(-1), label: 'Station sans neige au sol (0 cm), sans étiquette' });
+      items.push({ color: NEIGE_NULLE, icon: snowSwatch(1, true), label: 'Estompée : mesure de plus de 6 h' });
+    }
     return items;
   },
 
@@ -464,22 +498,42 @@ export const neige = defineModule<NeigeData>({
     const stationSize = zoomRamp(view.zoom, 6, 10, 3.5, 7.5);
     const now = Date.now();
     const stale = (s: SnowStation) => now - s.t * 1000 > STATION_STALE_MS;
+    // Les stations sans neige (0 cm) ne s'affichent qu'à partir d'un zoom où elles ne font plus de bruit.
+    const shownStations = view.zoom >= 8 ? data.stations : data.stations.filter((s) => s.cm > 0);
+    const snowy = shownStations.filter((s) => s.cm > 0);
+    const haloSize = stationSize + 2;
     const chosen = selection as Selection | null;
     const chosenStation = chosen && 'st' in chosen ? data.stations.filter((s) => s.id === chosen.st) : [];
     return [
+      // Halo blanc sous les stations avec neige : le point reste lisible sur les aplats foncés du risque (4, 5) comme sur le fond de nuit.
+      new ScatterplotLayer<SnowStation>({
+        id: 'neige/stations-halo',
+        data: snowy,
+        getPosition: (s) => onGround(s.lon, s.lat),
+        getRadius: haloSize,
+        radiusUnits: 'pixels',
+        getFillColor: (s) => [255, 255, 255, stale(s) ? 120 : 235],
+        stroked: false,
+        pickable: false,
+        parameters: OVER_MAP,
+        updateTriggers: { getPosition: terrain.version, getRadius: stationSize, getFillColor: step },
+      }),
       new ScatterplotLayer<SnowStation>({
         id: 'neige/stations',
-        data: data.stations,
+        data: shownStations,
         getPosition: (s) => onGround(s.lon, s.lat),
-        getRadius: stationSize,
+        getRadius: (s) => (s.cm > 0 ? stationSize : stationSize * 0.62),
         radiusUnits: 'pixels',
-        // Plein et blanc quand il y a de la neige, creux sans neige (0 cm), estompé quand la mesure est ancienne.
-        getFillColor: (s) => (s.cm > 0 ? [255, 255, 255, stale(s) ? 150 : 255] : [255, 255, 255, 0]),
-        getLineColor: (s) => [43, 120, 194, stale(s) ? 130 : 255],
+        // Plein de la couleur de la classe de hauteur ; 0 cm : petit rond clair à liseré gris ; estompé si la mesure est ancienne.
+        getFillColor: (s) => {
+          const cls = snowClass(s.cm);
+          return cls < 0 ? [255, 255, 255, stale(s) ? 60 : 150] : [...hexToRgb(NEIGE_SOL[cls]!), stale(s) ? 120 : 255];
+        },
+        getLineColor: (s) => (s.cm > 0 ? [...hexToRgb(STATUS.ink), stale(s) ? 110 : 255] : [...hexToRgb(NEIGE_NULLE), stale(s) ? 90 : 190]),
         stroked: true,
         filled: true,
         lineWidthUnits: 'pixels',
-        getLineWidth: 2.4,
+        getLineWidth: (s) => (s.cm > 0 ? 1.6 : 1.2),
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 140],
@@ -496,19 +550,19 @@ export const neige = defineModule<NeigeData>({
           fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
           fontWeight: 700,
           getSize: 11,
-          getColor: KEY,
+          getColor: (s) => [20, 26, 38, stale(s) ? 140 : 255],
           getTextAnchor: 'middle',
           getAlignmentBaseline: 'top',
-          getPixelOffset: [0, stationSize + 3],
+          getPixelOffset: [0, stationSize + 4],
           background: true,
-          getBackgroundColor: [255, 255, 255, 236],
-          getBorderColor: [43, 120, 194, 200],
-          getBorderWidth: 1,
+          getBackgroundColor: (s) => [255, 255, 255, stale(s) ? 170 : 240],
+          getBorderColor: (s) => [...hexToRgb(NEIGE_SOL[Math.max(snowClass(s.cm), 0)]!), stale(s) ? 120 : 255],
+          getBorderWidth: 1.4,
           backgroundBorderRadius: 8,
           backgroundPadding: [5, 2],
           billboard: true,
           pickable: true,
-          updateTriggers: { getPosition: terrain.version, getPixelOffset: stationSize },
+          updateTriggers: { getPosition: terrain.version, getPixelOffset: stationSize, getColor: step, getBackgroundColor: step, getBorderColor: step },
           parameters: OVER_MAP,
         }),
       labels.names.length > 0 &&
@@ -606,18 +660,19 @@ function describeStation(s: SnowStation | undefined, time: number, now: number):
   const measuredAt = s.t * 1000;
   const old = now - measuredAt > STATION_STALE_MS;
   return {
-    kind: 'Station de mesure · neige au sol',
+    kind: s.name.endsWith('(Nivôse)') ? 'Station de haute montagne · neige au sol' : 'Station de mesure · neige au sol',
     title: s.name,
     subtitle: s.alt !== undefined ? `Altitude ${nf.format(s.alt)} m` : undefined,
-    status: old ? plainStatus(`Sans mesure récente · dernière ${formatDateTime(measuredAt)}`) : measuredStatus(time, measuredAt),
+    status: old ? plainStatus(`Mesure ancienne · ${formatRelative(measuredAt, now)}`) : measuredStatus(time, measuredAt),
     figures: [{ value: nf.format(s.cm), unit: 'cm', label: s.cm > 0 ? 'neige au sol' : 'pas de neige au sol' }],
     fields: [
-      ['Dernière mesure', formatDateTime(measuredAt)],
+      ['Dernière mesure', `${formatDateTime(measuredAt)} (heure de Paris), ${formatRelative(measuredAt, now)}`],
       ...(s.alt !== undefined ? ([['Altitude', `${nf.format(s.alt)} m`]] as Array<[string, string]>) : []),
     ],
     note:
+      (s.name.endsWith('(Nivôse)') ? 'Station Nivôse : station automatique de haute montagne. ' : '') +
       'Hauteur totale de la couche de neige au sol, mesurée par la station automatique de Météo-France (observation horaire, brute, non validée). Seules les stations qui mesurent la neige sont montrées ; la hauteur à un endroit ne dit pas l’enneigement du massif alentour.' +
-      (old ? ' Cette mesure date de plus de 6 h : la station n’a rien transmis depuis.' : ''),
+      (old ? ' Cette mesure date de plus de 6 h : la station n’a rien transmis depuis, elle est estompée sur la carte.' : ''),
     actions: [{ label: 'Observations sur Météo-France', href: 'https://meteofrance.com/meteo-montagne' }],
   };
 }

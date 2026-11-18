@@ -78,8 +78,17 @@ export const STATUS = {
  * l'accompagnent partout (pastille sur la carte, légende, fiche).
  */
 export const AVALANCHE = ['#8cc84b', '#f2d94a', '#f29a2e', '#d9262c', '#5b0a14'] as const;
-/** Neige au sol (hauteur mesurée aux stations) : bleu glacier. */
-export const NEIGE_SOL = '#2b78c2';
+/**
+ * Neige au sol (hauteur mesurée aux stations) : rampe séquentielle rose, claire puis foncée, en quatre classes de hauteur
+ * (1-9, 10-29, 30-69, 70 cm et plus). Teinte laissée libre par les trains (bleu, orange, vert), les avions (violet), les bornes
+ * (turquoise) et les statuts (vert, jaune, orange, rouge). Le point porte un liseré sombre et un halo blanc : il reste lisible
+ * sur les aplats du risque d'avalanche et sur le fond sombre de nuit ; la hauteur est aussi écrite à côté (jamais la couleur seule).
+ */
+export const NEIGE_SOL = ['#f4b6d2', '#e0699f', '#b3256f', '#6e0f4a'] as const;
+/** Bornes basses (cm) des classes de `NEIGE_SOL`. */
+export const NEIGE_SOL_SEUILS = [1, 10, 30, 70] as const;
+/** Station sans neige au sol (0 cm) : gris discret. */
+export const NEIGE_NULLE = '#7a8091';
 
 /** Marées : remplissage des jauges et courbe des marégraphes. */
 export const MARINE = '#1d6fb8';
