@@ -39,7 +39,11 @@
   "minSdkVersion": 24,
   "fingerprints": [
     {
-      "name": "Google Play (signature de l'app)",
+      "name": "Google Play (signature de l'app, lue sur l'APK installé)",
+      "value": "0E:4B:8A:55:7A:41:9A:25:85:32:C3:80:A0:34:C8:09:C2:B0:CA:99:F6:18:4F:DD:B3:8B:BC:36:D0:A4:96:BA"
+    },
+    {
+      "name": "Ancienne valeur saisie (non utilisée par Play)",
       "value": "3A:42:12:CF:D8:58:2D:6B:D1:6A:2E:1E:48:92:25:08:AD:F3:D9:B2:E3:8F:F7:36:CC:F1:41:7E:09:BB:1E:B2"
     },
     {
