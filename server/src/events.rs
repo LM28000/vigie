@@ -4,11 +4,12 @@
 //! # Sources
 //!
 //! 1. **DATAtourisme** (base nationale des offices de tourisme, Licence Ouverte 2.0), de deux façons :
+//!    - **avec la clé de l'exploitant** (`DATATOURISME_API_KEY`, secrète) : l'API v1 (`api.datatourisme.fr/v1`), qui donne les
+//!      horaires réels, les tarifs, le lieu nommé, l'adresse, la description courte, le lien et le téléphone. Une lecture complète
+//!      par jour (pages de 100, une requête par page, quota de 1 000 par heure) ; si elle échoue, le relevé précédent est gardé
+//!      (moins de 48 h) ou l'export CSV prend le relais ;
 //!    - **sans clé** : l'export CSV « fêtes et manifestations » (`datatourisme-fma.csv`, 50 Mo, mis à jour chaque jour sur
-//!      data.gouv.fr), lu en continu, qui donne les dates (sans horaires) ;
-//!    - **avec le flux de l'utilisateur** (`DATATOURISME_FLUX_URL`, secrète : elle contient une clé) : un ZIP de fichiers
-//!      JSON-LD (un objet par fichier) ou un JSON-LD unique, qui donne en plus les horaires, les tarifs et les lieux.
-//!      Quand elle est définie, le flux remplace l'export CSV.
+//!      data.gouv.fr), lu en continu, qui donne les dates (sans horaires).
 //! 2. **« Que faire à Paris »** (opendata.paris.fr, Opendatasoft, sans clé, licence ODbL) : environ 3 000 événements.
 //! 3. **OpenAgenda** (agendas publics, via le jeu Opendatasoft « evenements-publics-openagenda », sans clé, Licence
 //!    Ouverte 1.0) : environ 20 000 événements par mois, toute la France.
@@ -16,7 +17,7 @@
 //! # Mémoire
 //!
 //! Aucun fichier n'est chargé en entier : chaque source est téléchargée sur le disque puis lue **en continu** (flux JSON
-//! ou CSV, une entrée de ZIP à la fois), et seuls les événements qui ont lieu dans la fenêtre (de 36 h avant à 31 jours
+//! ou CSV, une page d'API à la fois), et seuls les événements qui ont lieu dans la fenêtre (de 36 h avant à 31 jours
 //! après maintenant) sont gardés, en champs compacts. Chaque source est rangée dans `DATA_DIR/evenements/<source>.json.gz`
 //! (relue au démarrage) ; la fusion (dédoublonnage : même titre normalisé, même jour, moins de 300 m) se fait en mémoire
 //! sur ces trois jeux, puis la liste servie est gardée **compressée**.
@@ -66,6 +67,8 @@ const MAX_ENTRY_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Export CSV « fêtes et manifestations » de DATAtourisme sur data.gouv.fr (adresse stable, le fichier est remplacé chaque jour).
 const DATATOURISME_CSV_URL: &str = "https://www.data.gouv.fr/api/1/datasets/r/2c6023f2-ffce-4c1a-9728-bdc020e463b5";
+/// API DATAtourisme v1 (clé `DATATOURISME_API_KEY` dans l'en-tête `X-API-Key`) ; `DATATOURISME_API_URL` la remplace pour un essai.
+const DATATOURISME_API_URL: &str = "https://api.datatourisme.fr/v1";
 const PARIS_URL: &str = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/que-faire-a-paris-/exports/json";
 const OPENAGENDA_URL: &str = "https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/exports/json";
 
@@ -83,6 +86,7 @@ const CACHE_NAMES: [&str; 3] = ["paris", "datatourisme", "openagenda"];
 /// Rafraîchissement de chaque source : Paris et OpenAgenda changent dans la journée, DATAtourisme une fois par jour.
 const REFRESH: [Duration; 3] = [Duration::from_secs(3 * 3600), Duration::from_secs(20 * 3600), Duration::from_secs(6 * 3600)];
 const RETRY_AFTER: Duration = Duration::from_secs(45 * 60);
+const API_RETRY_AFTER: Duration = Duration::from_secs(3 * 3600);
 const TICK: Duration = Duration::from_secs(15 * 60);
 
 /// Catégories d'affichage (même ordre côté site, `web/src/modules/evenements.ts`).
@@ -109,6 +113,9 @@ pub struct Event {
     pub price_text: String,
     pub description: String,
     pub url: String,
+    /// Téléphone public de l'organisateur (API DATAtourisme seulement).
+    #[serde(default)]
+    pub phone: String,
 }
 
 // --- Ce que sert l'API ------------------------------------------------------------------------------------------------
@@ -149,7 +156,7 @@ pub async fn detail(Query(query): Query<DetailQuery>) -> Response {
             let (name, licence, url) = SOURCES[usize::from(e.src)];
             axum::Json(json!({
                 "place": e.place, "address": e.address, "price": e.price, "priceText": e.price_text,
-                "description": e.description, "url": e.url, "source": name, "licence": licence, "sourceUrl": url,
+                "description": e.description, "url": e.url, "phone": e.phone, "source": name, "licence": licence, "sourceUrl": url,
             }))
             .into_response()
         }
@@ -510,6 +517,7 @@ fn paris_event(r: ParisRecord, window: Window) -> Option<Event> {
         price_text: truncate(&strip_html(r.price_detail.as_deref().unwrap_or("")), 140),
         description,
         url: r.url.unwrap_or_default(),
+        phone: String::new(),
     })
 }
 
@@ -616,6 +624,7 @@ fn agenda_event(r: AgendaRecord, window: Window) -> Option<Event> {
         price_text: truncate(&conditions, 140),
         description,
         url,
+        phone: String::new(),
     })
 }
 
@@ -732,18 +741,18 @@ pub fn parse_datatourisme_csv<R: Read>(reader: R, window: Window) -> Result<Vec<
             price_text: String::new(),
             description,
             url: first_link(get(c_contacts)).unwrap_or(uri).to_string(),
+            phone: String::new(),
         });
     }
     Ok(out)
 }
 
-// --- DATAtourisme : flux JSON-LD de l'utilisateur ---------------------------------------------------------------------------
+// --- DATAtourisme : API v1 ------------------------------------------------------------------------------------------------
 //
-// Le flux (plateforme « diffuseur » de DATAtourisme) est une archive ZIP : un fichier JSON-LD par point d'intérêt (dans
-// `objects/`, plus un `index.json` qui les liste) ; on accepte aussi un JSON-LD unique (tableau ou `@graph`). Selon la
-// compaction du contexte, les clés portent un préfixe (`schema:startDate`, `rdfs:label`) ou non (`startDate`, `label`) et les
-// textes sont des chaînes, des `{"@value": …}` ou des tables de langues (`{"fr": ["…"]}`) : on lit donc **par nom local**,
-// sans compter sur le préfixe ni sur la forme du texte.
+// `GET https://api.datatourisme.fr/v1/entertainmentAndEvent` (clé dans l'en-tête `X-API-Key`), pages de 100 objets, filtrées sur
+// la période et suivies par le lien `meta.next`. Les objets sont des points d'intérêt (`label`, `type`, `takesPlaceAt`, `offers`,
+// `isLocatedAt`, `hasDescription`, `hasContact`…). Les clés sont lues par leur nom local et les textes tels que l'API les donne
+// (chaîne, table de langues, tableau) : une page reste petite (< 1 Mo), chaque objet est réduit à un `Event` compact dès sa lecture.
 
 fn local(key: &str) -> &str {
     key.rsplit([':', '/', '#']).next().unwrap_or(key)
@@ -775,13 +784,33 @@ fn find<'a>(value: &'a Value, name: &str, depth: u8) -> Option<&'a Value> {
     }
 }
 
-/// Un texte : chaîne, `{"@value"}`, table de langues (le français d'abord), ou premier élément d'un tableau.
+/// Tous les descendants (profondeur limitée) dont le nom local est `name`.
+fn find_all<'a>(value: &'a Value, name: &str, depth: u8, out: &mut Vec<&'a Value>) {
+    if depth == 0 {
+        return;
+    }
+    match value {
+        Value::Object(map) => {
+            for (k, v) in map {
+                if local(k) == name {
+                    out.push(v);
+                } else {
+                    find_all(v, name, depth - 1, out);
+                }
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|v| find_all(v, name, depth - 1, out)),
+        _ => {}
+    }
+}
+
+/// Un texte : chaîne, `{"@value"}`, table de langues (`{"fr": ["…"]}` ou `{"@fr": …}`, le français d'abord), ou premier élément d'un tableau.
 fn text_of(value: &Value) -> Option<String> {
     match value {
         Value::String(s) => Some(s.trim().to_string()).filter(|s| !s.is_empty()),
         Value::Number(n) => Some(n.to_string()),
         Value::Array(items) => items.iter().find_map(text_of),
-        Value::Object(map) => map.get("@value").and_then(text_of).or_else(|| map.get("fr").and_then(text_of)).or_else(|| map.get("en").and_then(text_of)),
+        Value::Object(map) => ["@value", "fr", "@fr", "en", "@en"].iter().find_map(|k| map.get(*k).and_then(text_of)),
         _ => None,
     }
 }
@@ -790,11 +819,7 @@ fn texts_of(value: &Value, out: &mut Vec<String>) {
     match value {
         Value::String(s) => out.push(s.clone()),
         Value::Array(items) => items.iter().for_each(|v| texts_of(v, out)),
-        Value::Object(map) => {
-            if let Some(v) = map.get("@value").or_else(|| map.get("@id")) {
-                texts_of(v, out);
-            }
-        }
+        Value::Object(map) => map.values().for_each(|v| texts_of(v, out)),
         _ => {}
     }
 }
@@ -809,24 +834,47 @@ fn number_of(value: &Value) -> Option<f64> {
     }
 }
 
-/// Les moments d'un événement (`takesPlaceAt` : dates de début et de fin, horaires facultatifs). Sans horaire : jours entiers.
-/// Un événement de plusieurs jours avec horaires a lieu chaque jour à ces heures.
-fn flux_spans(poi: &Value) -> Vec<(i64, i64)> {
-    let Some(schedules) = child(poi, "takesPlaceAt") else { return Vec::new() };
+/// Jour de la semaine (0 = lundi) d'un libellé d'`appliesOnDay` (« Lundi », `schema:Monday`…).
+fn weekday_of(text: &str) -> Option<i8> {
+    const NAMES: [(&str, &str); 7] = [("monday", "lundi"), ("tuesday", "mardi"), ("wednesday", "mercredi"), ("thursday", "jeudi"), ("friday", "vendredi"), ("saturday", "samedi"), ("sunday", "dimanche")];
+    let folded = fold(text);
+    NAMES.iter().position(|(en, fr)| folded.ends_with(en) || folded.contains(fr)).map(|i| i as i8)
+}
+
+/// Les moments d'un événement (`takesPlaceAt` : dates de début et de fin, horaires et jours de la semaine facultatifs), et « longue
+/// durée » quand une période dépasse 45 jours. Sans horaire : jours entiers. Avec horaires : chaque jour de la période (ceux de
+/// `appliesOnDay` seulement s'il est renseigné) à ces heures, mais seulement autour de la fenêtre : une exposition de toute l'année
+/// n'a pas à produire 365 moments.
+fn datatourisme_spans(poi: &Value, window: Window) -> (Vec<(i64, i64)>, bool) {
+    let Some(schedules) = child(poi, "takesPlaceAt") else { return (Vec::new(), false) };
     let items: Vec<&Value> = match schedules {
         Value::Array(items) => items.iter().collect(),
         one => vec![one],
     };
-    let mut spans = Vec::new();
+    // Le jour qui précède la fenêtre (un horaire qui passe minuit) jusqu'au dernier jour de la fenêtre.
+    let to_date = |seconds: i64| Timestamp::from_second(seconds).ok().map(|t| t.to_zoned(paris()).date());
+    let (Some(win_first), Some(win_last)) = (to_date(window.from - 86400), to_date(window.to)) else { return (Vec::new(), false) };
+    let (mut spans, mut long) = (Vec::new(), false);
     for item in items {
         let get = |name: &str| child(item, name).and_then(text_of);
         let Some(start_day) = get("startDate").as_deref().and_then(parse_date) else { continue };
         let end_day = get("endDate").as_deref().and_then(parse_date).unwrap_or(start_day);
+        let total_days = i64::from(end_day.since(start_day).ok().map_or(0, |d| d.get_days()));
+        long |= total_days > LONG_S / 86400;
         match (get("startTime"), get("endTime")) {
             (Some(start_time), end_time) => {
-                let days = (end_day.since(start_day).ok().map_or(0, |d| d.get_days())).clamp(0, 62);
-                for offset in 0..=i64::from(days) {
+                let mut names: Vec<String> = Vec::new();
+                if let Some(v) = child(item, "appliesOnDay") {
+                    texts_of(v, &mut names);
+                }
+                let weekdays: Vec<i8> = names.iter().filter_map(|t| weekday_of(t)).collect();
+                let skip = i64::from(win_first.since(start_day).ok().map_or(0, |d| d.get_days())).max(0);
+                let until = total_days.min(i64::from(win_last.since(start_day).ok().map_or(0, |d| d.get_days())));
+                for offset in skip..=until {
                     let Ok(day) = start_day.checked_add(jiff::Span::new().days(offset)) else { continue };
+                    if !weekdays.is_empty() && !weekdays.contains(&day.weekday().to_monday_zero_offset()) {
+                        continue;
+                    }
                     let Some(s) = at_time(day, &start_time) else { continue };
                     let e = match end_time.as_deref().and_then(|t| at_time(day, t)) {
                         Some(e) if e > s => e,
@@ -843,19 +891,45 @@ fn flux_spans(poi: &Value) -> Vec<(i64, i64)> {
             }
         }
     }
-    spans
+    (spans, long)
 }
 
-/// Un objet du flux → événement (s'il en est un, à venir, avec une position).
-pub fn flux_event(poi: &Value, window: Window) -> Option<Event> {
+/// Tarif : le plus petit et le plus grand des prix de l'offre (`minPrice`, `maxPrice`, `price`) ; un maximum de 0 est « gratuit »,
+/// sinon payant (« de 5 à 12 € »). Le texte libre `textPriceSpecification` complète, et décide quand il n'y a pas de montant.
+fn datatourisme_price(poi: &Value) -> (u8, String) {
+    let Some(offers) = child(poi, "offers") else { return (0, String::new()) };
+    let mut values = Vec::new();
+    for name in ["minPrice", "maxPrice", "price"] {
+        let mut found = Vec::new();
+        find_all(offers, name, 5, &mut found);
+        values.extend(found.into_iter().filter_map(number_of));
+    }
+    let min = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let note = find(offers, "textPriceSpecification", 3).and_then(text_of).map(|t| truncate(&strip_html(&t), 140)).unwrap_or_default();
+    if values.is_empty() {
+        let folded = fold(&note);
+        return (u8::from(folded.contains("gratuit") || folded.contains("entree libre")), note);
+    }
+    if max <= 0.0 {
+        return (1, note);
+    }
+    let fmt = |x: f64| if x.fract() == 0.0 { format!("{x:.0}") } else { format!("{x:.2}").replace('.', ",") };
+    let amount = if (max - min).abs() < 0.005 { format!("{} €", fmt(min)) } else { format!("de {} à {} €", fmt(min), fmt(max)) };
+    (2, if note.is_empty() { amount } else { format!("{amount} · {note}") })
+}
+
+/// Un objet de l'API → événement (s'il en est un, qui a lieu dans la fenêtre, avec une position).
+pub fn datatourisme_event(poi: &Value, window: Window) -> Option<Event> {
     let mut types = Vec::new();
-    texts_of(poi.get("@type")?, &mut types);
+    texts_of(poi.get("type").or_else(|| poi.get("@type"))?, &mut types);
     let type_list: Vec<&str> = types.iter().map(|t| local(t)).collect();
-    if !type_list.iter().any(|t| *t == "Event" || *t == "EntertainmentAndEvent" || t.ends_with("Event")) {
+    if !type_list.iter().any(|t| t.ends_with("Event")) {
         return None;
     }
     let title = strip_html(&child(poi, "label").or_else(|| child(poi, "name")).and_then(text_of)?);
-    let (spans, long) = finish(flux_spans(poi), window)?;
+    let (spans, long_period) = datatourisme_spans(poi, window);
+    let (spans, long) = finish(spans, window)?;
     let place = child(poi, "isLocatedAt")?;
     let geo = find(place, "geo", 4)?;
     let (lat, lon) = (number_of(child(geo, "latitude")?)?, number_of(child(geo, "longitude")?)?);
@@ -863,39 +937,33 @@ pub fn flux_event(poi: &Value, window: Window) -> Option<Event> {
         return None;
     }
     let description = child(poi, "hasDescription")
-        .and_then(|d| find(d, "description", 3))
-        .or_else(|| child(poi, "comment"))
-        .and_then(text_of)
+        .and_then(|d| find(d, "shortDescription", 3).and_then(text_of).or_else(|| find(d, "description", 3).and_then(text_of)))
+        .or_else(|| child(poi, "comment").and_then(text_of))
         .map(|d| truncate(&strip_html(&d), 280))
         .unwrap_or_default();
     if adult(&fold(&format!("{title} {description}"))) {
         return None;
     }
-    let commune = find(place, "addressLocality", 4).and_then(text_of).unwrap_or_default();
+    let city = find(place, "addressLocality", 4)
+        .and_then(text_of)
+        .or_else(|| find(place, "hasAddressCity", 4).and_then(|c| child(c, "label")).and_then(text_of))
+        .unwrap_or_default();
     let street = find(place, "streetAddress", 4).and_then(text_of).unwrap_or_default();
     let zip = find(place, "postalCode", 4).and_then(text_of).unwrap_or_default();
     let place_name = child(place, "label").or_else(|| child(place, "name")).and_then(text_of).unwrap_or_default();
-    // Tarif : un maximum de 0 est « gratuit », sinon payant (« de 5 à 12 € »).
-    let (mut price, mut price_text) = (0, String::new());
-    if let Some(offers) = child(poi, "offers") {
-        let min = find(offers, "minPrice", 4).and_then(number_of);
-        let max = find(offers, "maxPrice", 4).and_then(number_of).or(min);
-        match (min, max) {
-            (_, Some(max)) if max <= 0.0 => price = 1,
-            (Some(min), Some(max)) => {
-                price = 2;
-                let fmt = |x: f64| if x.fract() == 0.0 { format!("{x:.0}") } else { format!("{x:.2}").replace('.', ",") };
-                price_text = if (max - min).abs() < 0.005 { format!("{} €", fmt(min)) } else { format!("de {} à {} €", fmt(min), fmt(max)) };
-            }
-            _ => {}
+    let (mut price, price_text) = datatourisme_price(poi);
+    // Sans tarif structuré, « Entrée libre » dans la description vaut gratuit (comme pour OpenAgenda).
+    if price == 0 {
+        let folded = format!(" {} ", fold(&description));
+        if folded.contains(" entree libre ") || folded.contains(" entree gratuite ") || folded.contains(" gratuit ") || folded.contains(" gratuite ") {
+            price = 1;
         }
     }
-    let id = child(poi, "@id").and_then(text_of).or_else(|| poi.get("@id").and_then(text_of))?;
-    let url = child(poi, "hasContact")
-        .and_then(|c| find(c, "homepage", 3))
-        .and_then(text_of)
-        .filter(|u| u.starts_with("http"))
-        .unwrap_or_else(|| id.clone());
+    // L'URI est l'identifiant de l'export CSV aussi : l'identifiant d'un événement ne change pas selon la source.
+    let id = poi.get("uri").or_else(|| poi.get("@id")).or_else(|| poi.get("uuid")).and_then(text_of)?;
+    let contact = child(poi, "hasContact");
+    let url = contact.and_then(|c| find(c, "homepage", 3)).and_then(text_of).filter(|u| u.starts_with("http")).unwrap_or_default();
+    let phone = contact.and_then(|c| find(c, "telephone", 3)).and_then(text_of).map(|p| truncate(&p, 30)).unwrap_or_default();
     Some(Event {
         id: hash_id(SRC_TOURISM, &id),
         lon,
@@ -903,47 +971,101 @@ pub fn flux_event(poi: &Value, window: Window) -> Option<Event> {
         cat: category_of_types(&type_list, &fold(&title)),
         src: SRC_TOURISM,
         title: truncate(&title, 110),
-        commune,
+        commune: city.clone(),
         place: truncate(&place_name, 80),
-        address: [street, format!("{zip} {}", find(place, "addressLocality", 4).and_then(text_of).unwrap_or_default()).trim().to_string()]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(", "),
+        address: [street, format!("{zip} {city}").trim().to_string()].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", "),
         spans,
-        long,
+        long: long || long_period,
         price,
         price_text,
         description,
         url,
+        phone,
     })
 }
 
-/// Lit le flux téléchargé : une archive ZIP (une entrée JSON-LD par objet) ou un JSON-LD unique.
-pub fn parse_datatourisme_flux(path: &Path, window: Window) -> Result<Vec<Event>> {
-    let mut file = File::open(path)?;
-    let mut magic = [0u8; 2];
-    file.read_exact(&mut magic).context("flux vide")?;
-    drop(file);
+/// Au plus 700 pages de 100 objets (70 000 événements, bien plus que ce qu'on voit en novembre) : sous le quota de 1 000 requêtes
+/// par heure ; au-delà, la lecture s'arrête et le repli prend le relais.
+const API_MAX_PAGES: usize = 700;
+/// Au plus ~10 requêtes par seconde en continu : on reste très en dessous (une page toutes les 250 ms).
+const API_PAUSE: Duration = Duration::from_millis(250);
+const API_MAX_PAGE_BYTES: usize = 24 * 1024 * 1024;
+const API_FIELDS: &str = "uuid,uri,label,type,takesPlaceAt,offers.priceSpecification.minPrice,offers.priceSpecification.maxPrice,offers.priceSpecification.price,offers.textPriceSpecification,isLocatedAt.address,isLocatedAt.geo,hasDescription.shortDescription,hasContact.homepage,hasContact.telephone";
+
+/// Adresse de base de l'API (`DATATOURISME_API_URL` pour un autre serveur : essais, maquette).
+fn api_base() -> String {
+    std::env::var("DATATOURISME_API_URL").ok().map(|v| v.trim().trim_end_matches('/').to_string()).filter(|v| !v.is_empty()).unwrap_or_else(|| DATATOURISME_API_URL.to_string())
+}
+
+/// Lit toutes les pages de l'API, une à la fois, en suivant `meta.next`. `Ok` seulement si la lecture est complète : une page
+/// refusée (clé 401/403, quota 429) ou illisible interrompt tout, et l'appelant se replie sur le cache ou l'export CSV.
+/// Les erreurs ne citent ni l'adresse (elle peut porter la clé) ni la clé.
+async fn fetch_datatourisme_api(http: &reqwest::Client, key: &str, base: &str, window: Window, max_pages: usize) -> Result<Vec<Event>> {
+    let to_date = |seconds: i64| Timestamp::from_second(seconds).map(|t| t.to_zoned(paris()).date()).map_err(anyhow::Error::from);
+    let filters = format!("takesPlaceAt.endDate[gte]={} AND takesPlaceAt.startDate[lte]={}", to_date(window.from)?, to_date(window.to)?);
+    let first = reqwest::Url::parse_with_params(
+        &format!("{base}/entertainmentAndEvent"),
+        [("filters", filters.as_str()), ("fields", API_FIELDS), ("lang", "fr"), ("page_size", "100")],
+    )
+    .map_err(|_| anyhow::anyhow!("adresse de l'API invalide"))?;
+    let host = first.host_str().map(str::to_string);
+    let mut key_header = reqwest::header::HeaderValue::from_str(key.trim()).map_err(|_| anyhow::anyhow!("DATATOURISME_API_KEY contient un caractère interdit"))?;
+    key_header.set_sensitive(true);
     let mut out = Vec::new();
-    if &magic == b"PK" {
-        let mut archive = zip::ZipArchive::new(BufReader::new(File::open(path)?)).context("archive ZIP illisible")?;
-        for i in 0..archive.len() {
-            let entry = archive.by_index(i)?;
-            let name = entry.name().to_lowercase();
-            if !name.ends_with(".json") && !name.ends_with(".jsonld") || name.ends_with("index.json") || entry.size() > MAX_ENTRY_BYTES {
-                continue;
-            }
-            // Un objet par fichier ; un fichier illisible ne coûte que cet objet.
-            let Ok(value) = serde_json::from_reader::<_, Value>(entry.take(MAX_ENTRY_BYTES)) else { continue };
-            match &value {
-                Value::Array(items) => out.extend(items.iter().filter_map(|v| flux_event(v, window))),
-                v => out.extend(flux_event(v, window)),
+    let mut next = Some(first);
+    let mut pages = 0usize;
+    while let Some(url) = next.take() {
+        if pages >= max_pages {
+            bail!("plus de {max_pages} pages : lecture interrompue pour ménager le quota");
+        }
+        pages += 1;
+        let mut response = http
+            .get(url)
+            .header("X-API-Key", key_header.clone())
+            .header(reqwest::header::ACCEPT, "application/json")
+            .timeout(Duration::from_secs(60))
+            .send()
+            .await
+            .map_err(|e| e.without_url())?;
+        let status = response.status();
+        if !status.is_success() {
+            let wait = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            let reason = match status.as_u16() {
+                401 | 403 => " (clé refusée)",
+                429 => " (quota atteint)",
+                _ => "",
+            };
+            bail!("l'API a répondu {status}{reason}{}", if wait.is_empty() { String::new() } else { format!(", réessayer après {wait} s") });
+        }
+        let mut body: Vec<u8> = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|e| e.without_url())? {
+            body.extend_from_slice(&chunk);
+            if body.len() > API_MAX_PAGE_BYTES {
+                bail!("page trop grosse");
             }
         }
-    } else {
-        for_each_json::<Value, _>(BufReader::new(File::open(path)?), |poi| out.extend(flux_event(&poi, window)))?;
+        let page: Value = serde_json::from_slice(&body).map_err(|_| anyhow::anyhow!("page illisible"))?;
+        drop(body);
+        let objects = page.get("objects").and_then(Value::as_array).context("réponse sans `objects`")?;
+        out.extend(objects.iter().filter_map(|poi| datatourisme_event(poi, window)));
+        // Le lien suivant doit rester sur le même serveur (la clé lui est envoyée) ; l'API l'écrit parfois en http, et y répète la
+        // clé quand elle a été envoyée dans l'adresse : l'en-tête suffit.
+        if let Some(link) = page.get("meta").and_then(|m| m.get("next")).and_then(Value::as_str).filter(|l| !l.is_empty()) {
+            let mut link = reqwest::Url::parse(link).map_err(|_| anyhow::anyhow!("lien `next` invalide"))?;
+            if link.host_str().map(str::to_string) != host {
+                bail!("le lien `next` pointe vers un autre serveur");
+            }
+            let kept: Vec<(String, String)> = link.query_pairs().filter(|(k, _)| k != "api_key").map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+            link.set_query(None);
+            link.query_pairs_mut().extend_pairs(kept);
+            if base.starts_with("https://") {
+                let _ = link.set_scheme("https");
+            }
+            next = Some(link);
+            tokio::time::sleep(API_PAUSE).await;
+        }
     }
+    info!(pages, evenements = out.len(), "événements : API DATAtourisme lue");
     Ok(out)
 }
 
@@ -1086,10 +1208,24 @@ fn ods_url(base: &str, select: &str, filter: &str) -> Result<reqwest::Url> {
 }
 
 /// Une source : télécharge, lit en continu, efface le fichier. Les événements sont déjà réduits à la fenêtre.
-async fn fetch(http: &reqwest::Client, dir: &Path, source: usize) -> Result<Vec<Event>> {
-    let part = dir.join(format!("{}.download.part", CACHE_NAMES[source]));
+/// DATAtourisme avec clé : l'API ; si elle échoue, l'export CSV public (sauf si le cache, relevé il y a moins de 48 h, vaut mieux :
+/// un export sans horaires ne remplace pas des fiches complètes pour un incident d'une heure).
+async fn fetch(http: &reqwest::Client, dir: &Path, source: usize, api_key: Option<&str>) -> Result<Vec<Event>> {
     let window = Window::at(Timestamp::now().as_second());
-    let flux = std::env::var("DATATOURISME_FLUX_URL").ok().filter(|v| !v.trim().is_empty());
+    if source == usize::from(SRC_TOURISM)
+        && let Some(key) = api_key
+    {
+        let error = match fetch_datatourisme_api(http, key, &api_base(), window, API_MAX_PAGES).await {
+            Ok(events) if !events.is_empty() => return Ok(events),
+            Ok(_) => anyhow::anyhow!("aucun événement à venir"),
+            Err(error) => error,
+        };
+        if cache_age(&cache_path(dir, source)).await.is_some_and(|age| age < Duration::from_secs(48 * 3600)) {
+            return Err(error.context("API DATAtourisme indisponible, relevé précédent conservé"));
+        }
+        warn!("événements : API DATAtourisme indisponible ({error:#}), repli sur l'export CSV public");
+    }
+    let part = dir.join(format!("{}.download.part", CACHE_NAMES[source]));
     let url = match source {
         0 => ods_url(
             PARIS_URL,
@@ -1101,10 +1237,7 @@ async fn fetch(http: &reqwest::Client, dir: &Path, source: usize) -> Result<Vec<
             "uid,title_fr,description_fr,keywords_fr,conditions_fr,canonicalurl,firstdate_begin,lastdate_end,timings,location_name,location_address,location_city,location_coordinates,status,attendancemode",
             "lastdate_end >= now(days=-2) and firstdate_begin <= now(days=+31)",
         )?,
-        _ => match &flux {
-            Some(flux) => reqwest::Url::parse(flux.trim()).map_err(|_| anyhow::anyhow!("DATATOURISME_FLUX_URL n'est pas une adresse valide"))?,
-            None => reqwest::Url::parse(DATATOURISME_CSV_URL)?,
-        },
+        _ => reqwest::Url::parse(DATATOURISME_CSV_URL)?,
     };
     download(http, url, &part).await?;
     let path = part.clone();
@@ -1112,7 +1245,6 @@ async fn fetch(http: &reqwest::Client, dir: &Path, source: usize) -> Result<Vec<
         match source {
             0 => parse_paris(BufReader::new(File::open(&path)?), window),
             2 => parse_openagenda(BufReader::new(File::open(&path)?), window),
-            _ if flux.is_some() => parse_datatourisme_flux(&path, window),
             _ => parse_datatourisme_csv(BufReader::new(File::open(&path)?), window),
         }
     })
@@ -1140,8 +1272,8 @@ pub async fn poll_forever(http: reqwest::Client, data_dir: PathBuf) {
         return;
     }
     let wanted = wanted_sources();
-    let flux = std::env::var("DATATOURISME_FLUX_URL").is_ok_and(|v| !v.trim().is_empty());
-    info!(paris = wanted[0], datatourisme = wanted[1], flux_datatourisme = flux, openagenda = wanted[2], "événements : sources");
+    let api_key = std::env::var("DATATOURISME_API_KEY").ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    info!(paris = wanted[0], datatourisme = wanted[1], api_datatourisme = api_key.is_some(), openagenda = wanted[2], "événements : sources");
     let cached = tokio::task::spawn_blocking({
         let dir = dir.clone();
         move || load_all(&dir, wanted)
@@ -1163,7 +1295,7 @@ pub async fn poll_forever(http: reqwest::Client, data_dir: PathBuf) {
             if cache_age(&path).await.is_some_and(|age| age < REFRESH[source]) {
                 continue;
             }
-            match fetch(&http, &dir, source).await {
+            match fetch(&http, &dir, source, api_key.as_deref()).await {
                 Ok(events) if !events.is_empty() => {
                     info!(source = CACHE_NAMES[source], evenements = events.len(), "événements : source relevée");
                     let to_write = path.clone();
@@ -1178,7 +1310,9 @@ pub async fn poll_forever(http: reqwest::Client, data_dir: PathBuf) {
                 }
                 Err(error) => {
                     warn!(source = CACHE_NAMES[source], "événements : source indisponible : {error:#}");
-                    backoff[source] = Some(std::time::Instant::now() + RETRY_AFTER);
+                    // Une lecture de l'API coûte des centaines de requêtes (quota de 1 000 par heure) : pas de nouvel essai toutes les 45 minutes.
+                    let retry = if source == usize::from(SRC_TOURISM) && api_key.is_some() { API_RETRY_AFTER } else { RETRY_AFTER };
+                    backoff[source] = Some(std::time::Instant::now() + retry);
                 }
             }
         }
@@ -1345,30 +1479,34 @@ Visites du vignoble,https://www.datatourisme.fr/ontology/core#EntertainmentAndEv
         assert_eq!(events[2].cat, 6);
     }
 
-    /// Un objet du flux JSON-LD de DATAtourisme, tel que le décrit la documentation (préfixes `schema:` et `rdfs:` du contexte).
-    const FLUX_OBJECT: &str = r#"{
-      "@context": {"schema": "http://schema.org/", "rdfs": "http://www.w3.org/2000/01/rdf-schema#"},
-      "@id": "https://data.datatourisme.fr/13/aaaa-bbbb",
-      "@type": ["schema:Event", "EntertainmentAndEvent", "PointOfInterest", "Concert", "schema:MusicEvent"],
-      "rdfs:label": {"fr": ["Concert du Nouvel An"], "en": ["New Year concert"]},
-      "hasDescription": [{"@type": "Description", "dc:description": {"fr": ["<p>Orchestre et chœur.</p>"]}}],
-      "isLocatedAt": [{"@type": ["schema:Place", "Place"], "schema:address": [{"schema:addressLocality": "Lyon", "schema:postalCode": "69002", "schema:streetAddress": ["14 place Bellecour"]}],
-                        "schema:geo": {"schema:latitude": "45.757", "schema:longitude": "4.832"}, "rdfs:label": {"fr": ["Auditorium"]}}],
+    /// Un objet de l'API DATAtourisme v1, tel que le décrit sa documentation (`type`, `label` par langue, `takesPlaceAt`, `offers`,
+    /// `isLocatedAt`, `hasDescription`, `hasContact` ; champs en tableaux d'objets).
+    const API_OBJECT: &str = r#"{
+      "uuid": "c9308386-8fb9-308a-bb1e-fa9c080b7b58",
+      "uri": "https://data.datatourisme.fr/13/aaaa-bbbb",
+      "type": ["schema:Event", "EntertainmentAndEvent", "PointOfInterest", "Concert", "schema:MusicEvent"],
+      "label": {"fr": ["Concert du Nouvel An"], "en": ["New Year concert"]},
+      "hasDescription": [{"shortDescription": {"fr": ["<p>Orchestre et chœur.</p>"]}}],
+      "isLocatedAt": [{"address": [{"addressLocality": "Lyon", "postalCode": "69002", "streetAddress": "14 place Bellecour",
+                                    "hasAddressCity": {"label": {"fr": ["Lyon 2e"]}, "insee": "69382"}}],
+                        "geo": {"latitude": 45.757, "longitude": 4.832}, "label": {"fr": ["Auditorium"]}}],
       "takesPlaceAt": [{"startDate": "2026-11-20", "endDate": "2026-11-21", "startTime": "20:30:00", "endTime": "22:30:00"}],
-      "offers": [{"schema:priceSpecification": [{"schema:minPrice": "12", "schema:maxPrice": "25", "schema:priceCurrency": "EUR"}]}],
-      "hasContact": [{"schema:telephone": ["+33400000000"], "foaf:homepage": ["https://auditorium.example/"]}]
+      "offers": [{"priceSpecification": [{"minPrice": 12, "maxPrice": 25, "priceCurrency": "EUR"}], "textPriceSpecification": {"fr": ["Gratuit pour les moins de 12 ans"]}}],
+      "hasContact": [{"telephone": ["+33 4 00 00 00 00"], "homepage": ["https://auditorium.example/"]}]
     }"#;
 
     #[test]
-    fn datatourisme_flux_un_objet() {
-        let poi: Value = serde_json::from_str(FLUX_OBJECT).unwrap();
-        let e = flux_event(&poi, window()).unwrap();
+    fn datatourisme_api_un_objet() {
+        let poi: Value = serde_json::from_str(API_OBJECT).unwrap();
+        let e = datatourisme_event(&poi, window()).unwrap();
         assert_eq!((e.title.as_str(), e.cat, e.commune.as_str(), e.place.as_str()), ("Concert du Nouvel An", 0, "Lyon", "Auditorium"));
         assert_eq!(e.address, "14 place Bellecour, 69002 Lyon");
-        assert_eq!((e.price, e.price_text.as_str()), (2, "de 12 à 25 €"));
-        assert_eq!(e.url, "https://auditorium.example/");
+        assert_eq!((e.price, e.price_text.as_str()), (2, "de 12 à 25 € · Gratuit pour les moins de 12 ans"));
+        assert_eq!((e.url.as_str(), e.phone.as_str()), ("https://auditorium.example/", "+33 4 00 00 00 00"));
         assert_eq!(e.description, "Orchestre et chœur.");
         assert!((e.lat - 45.757).abs() < 1e-9 && (e.lon - 4.832).abs() < 1e-9);
+        // Même identifiant que l'export CSV (l'URI), pour que les fiches ne changent pas d'identité d'une source à l'autre.
+        assert_eq!(e.id, hash_id(SRC_TOURISM, "https://data.datatourisme.fr/13/aaaa-bbbb"));
         // Deux jours avec horaires : une séance chaque soir.
         assert_eq!(e.spans.len(), 2);
         assert_eq!(e.spans[0], (at_time("2026-11-20".parse().unwrap(), "20:30").unwrap(), at_time("2026-11-20".parse().unwrap(), "22:30").unwrap()));
@@ -1376,49 +1514,95 @@ Visites du vignoble,https://www.datatourisme.fr/ontology/core#EntertainmentAndEv
     }
 
     #[test]
-    fn datatourisme_flux_sans_prefixes_et_sans_horaires() {
+    fn datatourisme_api_sans_horaires_gratuit_et_pas_un_evenement() {
         let poi: Value = serde_json::from_str(
-            r#"{"@id":"https://data.datatourisme.fr/1/x","@type":["Market","EntertainmentAndEvent"],"label":{"fr":["Marché du samedi"]},
-                "isLocatedAt":{"address":{"addressLocality":"Albi"},"geo":{"latitude":43.93,"longitude":2.14}},
-                "takesPlaceAt":{"startDate":"2026-11-21","endDate":"2026-11-21"},
-                "offers":{"priceSpecification":{"maxPrice":0}}}"#,
+            r#"{"uuid":"x","uri":"https://data.datatourisme.fr/1/x","type":["Market","EntertainmentAndEvent"],"label":{"fr":["Marché du samedi"]},
+                "isLocatedAt":[{"address":[{"hasAddressCity":{"label":{"fr":["Albi"]}}}],"geo":{"latitude":43.93,"longitude":2.14}}],
+                "takesPlaceAt":[{"startDate":"2026-11-21","endDate":"2026-11-21"}],
+                "offers":[{"priceSpecification":[{"price":0}]}]}"#,
         )
         .unwrap();
-        let e = flux_event(&poi, window()).unwrap();
-        assert_eq!((e.cat, e.price, e.commune.as_str()), (4, 1, "Albi"));
+        let e = datatourisme_event(&poi, window()).unwrap();
+        assert_eq!((e.cat, e.price, e.commune.as_str(), e.url.as_str()), (4, 1, "Albi", ""));
         assert_eq!(e.spans, vec![day("2026-11-21")]);
-        assert_eq!(e.url, "https://data.datatourisme.fr/1/x");
-        // Pas un événement : un restaurant.
-        let restaurant: Value = serde_json::from_str(r#"{"@id":"r","@type":["Restaurant","PointOfInterest"],"label":"Chez Paul"}"#).unwrap();
-        assert!(flux_event(&restaurant, window()).is_none());
+        let restaurant: Value = serde_json::from_str(r#"{"uuid":"r","type":["Restaurant","PointOfInterest"],"label":{"fr":["Chez Paul"]}}"#).unwrap();
+        assert!(datatourisme_event(&restaurant, window()).is_none());
+        // Passé : écarté.
+        let past: Value = serde_json::from_str(&API_OBJECT.replace("2026-11-20", "2026-09-20").replace("2026-11-21", "2026-09-21")).unwrap();
+        assert!(datatourisme_event(&past, window()).is_none());
     }
 
     #[test]
-    fn datatourisme_flux_zip_et_json_ld_unique() {
-        let dir = std::env::temp_dir().join(format!("vigie-evenements-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        // L'archive du diffuseur : index.json, puis un fichier par objet.
-        let zip_path = dir.join("flux.zip");
-        {
-            let mut writer = zip::ZipWriter::new(File::create(&zip_path).unwrap());
-            let options = zip::write::SimpleFileOptions::default();
-            writer.start_file("index.json", options).unwrap();
-            writer.write_all(br#"[{"@id":"https://data.datatourisme.fr/13/aaaa-bbbb","file":"objects/1/aaaa.json"}]"#).unwrap();
-            writer.start_file("objects/1/aaaa.json", options).unwrap();
-            writer.write_all(FLUX_OBJECT.as_bytes()).unwrap();
-            writer.start_file("objects/1/cassé.json", options).unwrap();
-            writer.write_all(b"{ pas du json").unwrap();
-            writer.finish().unwrap();
+    fn datatourisme_api_horaires_par_jour_de_la_semaine_et_longue_periode() {
+        // Un marché le mercredi et le samedi pendant un an : seuls les jours de la fenêtre, et « longue durée ».
+        let poi: Value = serde_json::from_str(
+            r#"{"uuid":"m","uri":"https://data.datatourisme.fr/1/m","type":["Market","EntertainmentAndEvent"],"label":{"fr":["Marché de Pau"]},
+                "isLocatedAt":[{"geo":{"latitude":43.3,"longitude":-0.37}}],
+                "takesPlaceAt":[{"startDate":"2026-01-01","endDate":"2026-12-31","startTime":"08:00","endTime":"13:00",
+                                 "appliesOnDay":[{"label":{"fr":["Mercredi"]},"key":"schema:Wednesday"},{"label":{"fr":["Samedi"]},"key":"schema:Saturday"}]}]}"#,
+        )
+        .unwrap();
+        let e = datatourisme_event(&poi, window()).unwrap();
+        assert!(e.long);
+        // 18 novembre (mercredi) au 19 décembre : 5 mercredis et 5 samedis environ ; jamais un autre jour.
+        assert!((8..=11).contains(&e.spans.len()), "{} moments", e.spans.len());
+        let zone = paris();
+        for &(s, _) in &e.spans {
+            let weekday = Timestamp::from_second(s).unwrap().to_zoned(zone.clone()).weekday().to_monday_zero_offset();
+            assert!(weekday == 2 || weekday == 5, "jour {weekday}");
         }
-        let events = parse_datatourisme_flux(&zip_path, window()).unwrap();
-        assert_eq!(events.len(), 1);
-        // Un JSON-LD unique : tableau, ou `@graph`.
-        let single = dir.join("flux.jsonld");
-        std::fs::write(&single, format!(r#"{{"@context":{{}},"@graph":[{FLUX_OBJECT},{{"@id":"z","@type":["Hotel"]}}]}}"#)).unwrap();
-        assert_eq!(parse_datatourisme_flux(&single, window()).unwrap().len(), 1);
-        std::fs::write(&single, format!("[{FLUX_OBJECT}]")).unwrap();
-        assert_eq!(parse_datatourisme_flux(&single, window()).unwrap().len(), 1);
-        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Un faux serveur de l'API : exige la clé dans l'en-tête, sert deux pages liées par `meta.next` (écrit en http, avec la clé).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn datatourisme_api_pagination_et_cle() {
+        use axum::{Router, extract::Query, http::HeaderMap, routing::get};
+        async fn handler(headers: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
+            if headers.get("x-api-key").and_then(|v| v.to_str().ok()) != Some("cle-de-test") {
+                return StatusCode::UNAUTHORIZED.into_response();
+            }
+            assert_eq!(q.get("page_size").map(String::as_str), Some("100"));
+            assert!(q.get("filters").is_some_and(|f| f.contains("takesPlaceAt.endDate[gte]=2026-11-17") && f.contains("takesPlaceAt.startDate[lte]=")));
+            assert!(q.get("fields").is_some_and(|f| f.contains("takesPlaceAt")));
+            let page: u32 = q.get("page").and_then(|p| p.parse().ok()).unwrap_or(1);
+            let object: Value = serde_json::from_str(&API_OBJECT.replace("aaaa-bbbb", &format!("p{page}"))).unwrap();
+            let next = if page < 2 { json!("http://127.0.0.1:1/v1/entertainmentAndEvent?api_key=cle-de-test&page=2") } else { Value::Null };
+            axum::Json(json!({ "objects": [object], "meta": { "total": 2, "page": page, "page_size": 100, "next": next } })).into_response()
+        }
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move { axum::serve(listener, Router::new().route("/v1/entertainmentAndEvent", get(handler))).await.unwrap() });
+        let http = reqwest::Client::new();
+        let base = format!("http://127.0.0.1:{port}/v1");
+        // Le lien `next` pointe vers un port fermé : la lecture échoue en entier (une lecture incomplète n est jamais publiée).
+        assert!(fetch_datatourisme_api(&http, "cle-de-test", &base, window(), 10).await.is_err());
+        // Une mauvaise clé est refusée et l'erreur ne contient ni la clé ni l'adresse.
+        let error = fetch_datatourisme_api(&http, "mauvaise", &base, window(), 10).await.unwrap_err().to_string();
+        assert!(error.contains("401") && error.contains("clé refusée") && !error.contains("mauvaise") && !error.contains("127.0.0.1"), "{error}");
+        // Trop de pages : arrêt.
+        assert!(fetch_datatourisme_api(&http, "cle-de-test", &base, window(), 1).await.unwrap_err().to_string().contains("plus de 1 pages"));
+    }
+
+    /// Les pages liées correctement (même hôte et même port) : tous les objets sont lus, la clé n'est pas répétée dans le lien.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn datatourisme_api_suit_les_liens_suivants() {
+        use axum::{Router, extract::Query, http::HeaderMap, routing::get};
+        use std::sync::atomic::{AtomicU16, Ordering::SeqCst};
+        static PORT: AtomicU16 = AtomicU16::new(0);
+        async fn handler(headers: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
+            assert_eq!(headers.get("x-api-key").and_then(|v| v.to_str().ok()), Some("cle-de-test"));
+            let page: u32 = q.get("page").and_then(|p| p.parse().ok()).unwrap_or(1);
+            let object: Value = serde_json::from_str(&API_OBJECT.replace("aaaa-bbbb", &format!("p{page}"))).unwrap();
+            let next = if page < 3 { json!(format!("http://127.0.0.1:{}/v1/entertainmentAndEvent?api_key=cle-de-test&page={}", PORT.load(SeqCst), page + 1)) } else { Value::Null };
+            axum::Json(json!({ "objects": [object, {"uuid": "h", "type": ["Hotel"]}], "meta": { "next": next } })).into_response()
+        }
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        PORT.store(listener.local_addr().unwrap().port(), SeqCst);
+        tokio::spawn(async move { axum::serve(listener, Router::new().route("/v1/entertainmentAndEvent", get(handler))).await.unwrap() });
+        let base = format!("http://127.0.0.1:{}/v1", PORT.load(SeqCst));
+        let events = fetch_datatourisme_api(&reqwest::Client::new(), "cle-de-test", &base, window(), 10).await.unwrap();
+        assert_eq!(events.len(), 3, "trois pages, un événement chacune, l'hôtel écarté");
+        assert_eq!(events.iter().map(|e| e.id).collect::<HashSet<_>>().len(), 3);
     }
 
     fn event(src: u8, id: &str, title: &str, lon: f64, lat: f64, date: &str) -> Event {
@@ -1438,6 +1622,7 @@ Visites du vignoble,https://www.datatourisme.fr/ontology/core#EntertainmentAndEv
             price_text: String::new(),
             description: String::new(),
             url: String::new(),
+            phone: String::new(),
         }
     }
 
