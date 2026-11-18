@@ -8,6 +8,7 @@
 //! - rassemble les bus, trams et métros en direct des réseaux qui publient leurs positions ;
 //! - relève le champ de vent (Open-Meteo, modèle ARPEGE) toutes les 6 heures ;
 //! - relève l'indice de qualité de l'air (Atmo Data, avec un compte) toutes les heures ;
+//! - relève les mesures horaires des stations de qualité de l'air (LCSQA / Geod'air, sans clé) ;
 //! - relève le niveau de la mer aux marégraphes du Shom (REFMAR) toutes les 10 minutes ;
 //! - estime la position des bus, trams et métros des réseaux qui ne publient que leurs horaires en temps réel ;
 //! - convertit le MNT du LiDAR HD de l'IGN en tuiles d'altitude pour le relief 3D (`/api/relief-lidar`) ;
@@ -36,6 +37,7 @@
 mod accidents;
 mod actualite;
 mod air;
+mod air_mesures;
 mod analyse;
 mod api;
 mod bikes;
@@ -158,6 +160,7 @@ async fn main() -> Result<()> {
     tokio::spawn(traffic_state::poll_forever(http.clone(), state.clone()));
     tokio::spawn(vigilance::poll_forever(http.clone(), state.clone()));
     tokio::spawn(air::poll_forever(http.clone(), state.clone()));
+    tokio::spawn(air_mesures::poll_forever(http.clone(), state.clone()));
     tokio::spawn(tides::poll_forever(http.clone(), state.clone()));
     tokio::spawn(rivers::poll_forever(http.clone()));
     tokio::spawn(neige::poll_forever(http.clone(), config.data_dir.clone()));

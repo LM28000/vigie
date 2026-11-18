@@ -21,7 +21,7 @@ const SYNONYMS: Record<string, string> = {
   velos: 'velo velib bicyclette libre service',
   vigicrues: 'crues crue inondation inondations rivieres cours d eau troncon vigilance crue fleuve debordement',
   'vigilance-meteo': 'meteo orages alerte alertes tempete canicule vigilance orange rouge jaune departement grand froid neige verglas vent violent inondation avalanche',
-  air: 'air pollution qualite ozone particules pm10 no2 atmo indice episode smog',
+  air: 'air pollution qualite ozone particules pm10 pm2 no2 atmo indice episode smog station stations mesure mesures concentration geodair lcsqa',
   feux: 'feu incendie incendies foret feux de foret point chaud brulage nasa firms',
   seismes: 'seisme tremblement de terre secousse magnitude sismique emsc',
   electricite: 'energie courant reseau electrique production nucleaire eolien solaire hydraulique rte consommation region centrale electrique mix bretagne normandie hauts de france grand est pays de la loire nouvelle aquitaine occitanie auvergne rhone alpes provence alpes cote d azur centre val de loire bourgogne franche comte ile de france',
