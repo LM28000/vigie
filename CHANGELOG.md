@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Couche « Événements »
+
+- **Événements publics** (Territoire) : ~54 000 événements des 30 prochains jours (concerts, spectacles, expositions, fêtes, marchés, sport, visites, rencontres), huit catégories (teinte + pictogramme), disques gradués de loin, points puis pictogrammes puis titres en zoomant, opacité = en cours à l'instant de la frise. Période reliée à la frise (jour, instant, week-end, 7 jours), filtres catégorie, gratuit, longues durées ; fiche avec horaires, lieu, tarif, description, lien, source et licence ; recherche (« concert Lyon »).
+- **Sources** : DATAtourisme (export CSV public sans clé, ou flux ZIP JSON-LD de l'exploitant via `DATATOURISME_FLUX_URL`, secrète), Que faire à Paris (ODbL), OpenAgenda via le jeu Opendatasoft (sans clé). Lecture en continu, dédoublonnage titre + jour + 300 m, contenu adulte écarté.
+- **Veille** : type « Événement public (dans les 6 h) », désactivé par défaut.
+- **Serveur** : `server/src/events.rs`, `GET /api/evenements` et `GET /api/evenements/fiche`. Variables `DATATOURISME_FLUX_URL` et `EVENEMENTS_SOURCES`.
+
 ## 17 novembre 2026 — Zones surveillées (veille) et orages
 
 - **Veille** : jusqu'à 12 zones (cercle, polygone, commune, département) ; Vigie prévient dans l'application quand il s'y passe quelque chose (vigilance orange ou rouge, crue, rivière en forte montée, incendie, séisme ressenti, brouillage GPS, avion militaire, train supprimé ou très en retard à une gare de la zone). Avis discret, liste des alertes, pastille, compteur dans le titre, son facultatif ; `Notification` seulement en contexte sûr (le site est en HTTP). Dédoublonnage par identifiant d'événement, zones gardées dans le navigateur et dans l'adresse (`veille=`), version téléphone (onglet de la feuille).

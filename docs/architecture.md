@@ -64,6 +64,7 @@ flowchart LR
 | `synthese/veille.rs` | Zones surveillées (`POST /api/veille`) : un index national d'événements (vigilance, crues, rivières, feux, brouillage, avions militaires, trains en retard ou supprimés) recalculé au plus toutes les 30 s à partir des mêmes caches, filtré par zone (point dans le contour, départements). Aucune requête externe, aucune zone ni alerte gardée côté serveur. |
 | `vigilance.rs`, `air.rs`, `wind.rs`, `tides.rs`, `rivers.rs`, `fires.rs` | Vigilance météo, qualité de l'air, vent, marées, rivières (Hub'Eau), feux. |
 | `accidents.rs`, `monuments.rs` | Accidents de la route et monuments historiques (fichiers lus en continu, compactés en colonnes). |
+| `events.rs` | Événements publics des 30 prochains jours (DATAtourisme CSV ou flux ZIP JSON-LD, Que faire à Paris, OpenAgenda via Opendatasoft) : lecture en continu, fusion et dédoublonnage, liste en colonnes gzip (`GET /api/evenements`) et fiche à la demande (`/api/evenements/fiche`). |
 | `cameras.rs`, `webcams.rs` | Caméras de vidéoprotection d'OpenStreetMap (extraction Overpass hebdomadaire) ; webcams Windy (clé, catalogue, lien d'image à la demande) et Criter (Lyon). |
 | `tiles/` | Moteur de tuiles vectorielles : voir [moteur-de-tuiles.md](moteur-de-tuiles.md). |
 | `analyse.rs` | `POST /api/analyse` : voir [analyse-de-zone.md](analyse-de-zone.md). |

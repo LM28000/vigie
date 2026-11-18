@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use super::*;
 
 /// Les types que le serveur sait évaluer (le séisme est évalué par le site).
-pub const TYPES: [&str; 7] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train"];
+pub const TYPES: [&str; 8] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train", "evenement"];
 
 const MAX_ZONES: usize = 12;
 const MAX_VERTICES: usize = 500;
@@ -177,7 +177,8 @@ impl Zone {
             return Err(format!("zone {} : départements invalides", input.id));
         }
         let types: HashSet<&'static str> = if input.types.is_empty() {
-            TYPES.iter().copied().collect()
+            // Les événements publics ne sont surveillés que sur demande expresse.
+            TYPES.iter().copied().filter(|t| *t != "evenement").collect()
         } else {
             TYPES.iter().copied().filter(|t| input.types.iter().any(|wanted| wanted == t)).collect()
         };
@@ -549,6 +550,29 @@ fn train_events(network: &Network, realtime: &Realtime, now: i64) -> Vec<Located
     out
 }
 
+/// Événements publics (concerts, marchés…) qui commencent dans les 6 prochaines heures, d'après la couche « Événements » (déjà en
+/// mémoire). Gravité « à noter » : ils passent après tout le reste dans une zone. Pas de rubrique « muette » si la source manque :
+/// c'est un type facultatif, désactivé par défaut.
+fn add_public_events(index: &mut Index, now: i64) {
+    let Some(soon) = crate::events::starting_soon(now, 6) else { return };
+    index.located.extend(soon.into_iter().map(|e| {
+        Point {
+            kind: "evenement",
+            id: format!("evt:{}:{}", e.id, e.start),
+            severity: 1,
+            title: e.title,
+            detail: e.detail,
+            lon: e.lon,
+            lat: e.lat,
+            time: Some(e.start),
+            module: "evenements",
+            selection: json!({ "id": e.id }),
+            zoom: 14.0,
+        }
+        .located(None)
+    }));
+}
+
 pub fn build_index(inputs: &Inputs, trains: Option<Vec<Located>>, now: i64) -> Index {
     let mut index = Index { generated_at: now, ..Index::default() };
     match vigilance_events(&inputs.vigilance, now) {
@@ -623,7 +647,9 @@ async fn current_index(state: AppState) -> Result<Arc<Index>, String> {
             air: None,
         };
         let trains = state.realtime().map(|realtime| train_events(&state.network(), &realtime, now));
-        build_index(&inputs, trains, now)
+        let mut index = build_index(&inputs, trains, now);
+        add_public_events(&mut index, now);
+        index
     })
     .await
     .map_err(|e| e.to_string())?;

@@ -11,6 +11,7 @@
 #   ATMO_USERNAME=… ATMO_PASSWORD=…    compte Atmo Data de la couche « Qualité de l'air » (secrets)
 #   IDFM_PRIM_API_KEY='…'              clé PRIM d'Île-de-France Mobilités (transports d'Île-de-France ; secrète, entre apostrophes)
 #   WINDY_WEBCAMS_KEY='…'              clé Windy Webcams (webcams de la couche « Caméras » ; secrète, entre apostrophes)
+#   DATATOURISME_FLUX_URL='…'          adresse de ton flux DATAtourisme (couche « Événements » ; secrète, entre apostrophes ; sans elle, l'export CSV public)
 
 name: carte-vivante
 
@@ -41,6 +42,9 @@ services:
       IDFM_MEMOIRE_MO: "${IDFM_MEMOIRE_MO:-}"
       # Vide = vue photoréaliste (Cesium ion) indisponible. Jeton Cesium ion : il ne sort jamais du serveur.
       CESIUM_ION_TOKEN: "${CESIUM_ION_TOKEN:-}"
+      # Couche « Événements » : adresse du flux DATAtourisme de l'exploitant (secrète, elle contient une clé ; vide = export CSV public) et sources relevées (paris,datatourisme,openagenda par défaut).
+      DATATOURISME_FLUX_URL: "${DATATOURISME_FLUX_URL:-}"
+      EVENEMENTS_SOURCES: "${EVENEMENTS_SOURCES:-}"
     volumes:
       - "${DATA_PATH:-./data}:/data"
       - "${ARCHIVE_PATH:-./archive}:/archive"

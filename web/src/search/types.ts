@@ -2,7 +2,7 @@ import type { ModuleManager } from '../core/moduleManager';
 import type { Query } from './normalize';
 
 /** Les types de résultats, dans l'ordre où l'on propose de les filtrer. */
-export type Kind = 'lieu' | 'gare' | 'train' | 'avion' | 'navire' | 'reseau' | 'velo' | 'parking' | 'borne' | 'webcam' | 'action';
+export type Kind = 'lieu' | 'gare' | 'train' | 'avion' | 'navire' | 'reseau' | 'velo' | 'parking' | 'borne' | 'webcam' | 'evenement' | 'action';
 
 export const KIND_LABELS: Record<Kind, string> = {
   lieu: 'Lieux',
@@ -15,10 +15,11 @@ export const KIND_LABELS: Record<Kind, string> = {
   parking: 'Parkings',
   borne: 'Bornes de recharge',
   webcam: 'Webcams',
+  evenement: 'Événements',
   action: 'Couches et actions',
 };
 
-export const KIND_ORDER: readonly Kind[] = ['lieu', 'gare', 'train', 'avion', 'navire', 'reseau', 'velo', 'parking', 'borne', 'webcam', 'action'];
+export const KIND_ORDER: readonly Kind[] = ['lieu', 'gare', 'train', 'avion', 'navire', 'reseau', 'velo', 'parking', 'borne', 'webcam', 'evenement', 'action'];
 
 export interface SearchResult {
   /** Identifiant stable (clé React et `id` de l'option). */
