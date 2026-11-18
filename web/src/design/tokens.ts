@@ -157,6 +157,14 @@ export const PARKING: Ramp = {
   jour: ['#9fb3d9', '#6c8bc4', '#4467a6', '#2c4a82'],
   nuit: ['#9fb3d9', '#6c8bc4', '#4467a6', '#2c4a82'],
 };
+/**
+ * Actualité locale (prune) : un point par commune dont la presse parle, d'une seule teinte (le nombre de titres est écrit et dit par la taille).
+ * Identique le jour et la nuit : le disque a un halo blanc et un contour sombre, le chiffre est blanc dessus (contraste 6,5:1).
+ */
+export const ACTUALITE: Ramp = {
+  jour: ['#a03c8c'],
+  nuit: ['#a03c8c'],
+};
 /** Élections, participation (bleu) : de la plus faible à la plus forte. */
 export const PARTICIPATION: Ramp = {
   jour: ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0a2548'],

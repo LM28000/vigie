@@ -12,6 +12,7 @@
 //! - estime la position des bus, trams et métros des réseaux qui ne publient que leurs horaires en temps réel ;
 //! - convertit le MNT du LiDAR HD de l'IGN en tuiles d'altitude pour le relief 3D (`/api/relief-lidar`) ;
 //! - donne au site l'adresse des Google Photorealistic 3D Tiles (Cesium ion, `/api/photoreal/endpoint`), sans lui montrer le jeton ;
+//! - lit les fils RSS de la presse régionale et du service public (titres seulement, `robots.txt` respecté) et place chaque titre sur sa commune (`/api/actualite`) ;
 //! - sert l'API `/api/trains` au site.
 //!
 //! Réglages par variables d'environnement :
@@ -21,6 +22,7 @@
 //! - `HISTORIQUE_JOURS` (7) : durée de conservation des positions enregistrées, en jours ;
 //! - `ARCHIVE_SNCF_JOURS` (180) : durée de conservation de l'archive brute du temps réel SNCF (0 = sans limite) ;
 //! - `RELIEF_LIDAR_MO` (300) : plafond du cache disque des tuiles de relief LiDAR, en Mo ;
+//! - `ACTUALITE` (activé) : `non` désactive la lecture des fils d'actualité locale ; `--actualite-seule` lance ce seul collecteur et sa route (test) ;
 //! - `RUST_LOG` (info) : niveau de détail des journaux ;
 //! - `AISSTREAM_API_KEY` (aucune) : clé du flux des navires ; sans elle, la couche est désactivée ;
 //! - `TUILES_EFFACER_SOURCES` (aucune) : si définie, la source d'un jeu de tuiles est effacée après sa fabrication ;
@@ -30,6 +32,7 @@
 //! - `ATMO_USERNAME` et `ATMO_PASSWORD` (aucun) : compte Atmo Data pour la qualité de l'air ; sans eux, la couche est désactivée.
 
 mod accidents;
+mod actualite;
 mod air;
 mod analyse;
 mod api;
@@ -113,6 +116,11 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=warn")))
         .init();
     let config = Config::from_env()?;
+    // Test du collecteur d'actualité seul : ni horaires SNCF à télécharger, ni autre source (voir `actualite.rs`).
+    if args.iter().any(|a| a == "--actualite-seule") {
+        let http = reqwest::Client::builder().user_agent(concat!("carte-vivante/", env!("CARGO_PKG_VERSION"))).timeout(Duration::from_secs(120)).build()?;
+        return actualite::serve_alone(http, config.data_dir, SocketAddr::new(config.host, config.port)).await;
+    }
 
     let http = reqwest::Client::builder()
         .user_agent(concat!("carte-vivante/", env!("CARGO_PKG_VERSION")))
@@ -147,6 +155,7 @@ async fn main() -> Result<()> {
     tokio::spawn(air::poll_forever(http.clone(), state.clone()));
     tokio::spawn(tides::poll_forever(http.clone(), state.clone()));
     tokio::spawn(rivers::poll_forever(http.clone()));
+    tokio::spawn(actualite::poll_forever(http.clone(), config.data_dir.clone()));
     tokio::spawn(estimates::poll_forever(http.clone(), config.data_dir.clone(), state.clone()));
     state.tiles().spawn(http.clone(), config.data_dir.clone());
     tokio::spawn(multimodal::load::load_forever(http.clone(), config.data_dir.clone(), state.clone()));

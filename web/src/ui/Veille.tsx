@@ -35,6 +35,7 @@ const TYPE_ICONS: Record<EventType, string> = {
   brouillage: 'brouillage-gps',
   avion: 'avions',
   train: 'trains',
+  actualite: 'actualite',
 };
 
 /** Vigilance et crues disent leur gravité par une couleur officielle ; le reste, par un mot. */

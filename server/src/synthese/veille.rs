@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use super::*;
 
 /// Les types que le serveur sait évaluer (le séisme est évalué par le site).
-pub const TYPES: [&str; 7] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train"];
+pub const TYPES: [&str; 8] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train", "actualite"];
 
 const MAX_ZONES: usize = 12;
 const MAX_VERTICES: usize = 500;
@@ -549,6 +549,31 @@ fn train_events(network: &Network, realtime: &Realtime, now: i64) -> Vec<Located
     out
 }
 
+/// Titres d'actualité locale des 3 dernières heures (au plus 400), posés sur leur commune (ou le milieu de leur département).
+fn news_events(now: i64) -> Option<Vec<Located>> {
+    let news = crate::actualite::recent(now, 3 * 3600, 400)?;
+    Some(
+        news.into_iter()
+            .map(|n| {
+                Point {
+                    kind: "actualite",
+                    id: n.id,
+                    severity: 1,
+                    title: n.title,
+                    detail: format!("{} · {}", n.place_name, n.source),
+                    lon: n.lon,
+                    lat: n.lat,
+                    time: Some(n.t),
+                    module: "actualite",
+                    selection: json!({ "place": n.place }),
+                    zoom: 11.0,
+                }
+                .located(None)
+            })
+            .collect(),
+    )
+}
+
 pub fn build_index(inputs: &Inputs, trains: Option<Vec<Located>>, now: i64) -> Index {
     let mut index = Index { generated_at: now, ..Index::default() };
     match vigilance_events(&inputs.vigilance, now) {
@@ -623,7 +648,13 @@ async fn current_index(state: AppState) -> Result<Arc<Index>, String> {
             air: None,
         };
         let trains = state.realtime().map(|realtime| train_events(&state.network(), &realtime, now));
-        build_index(&inputs, trains, now)
+        let mut index = build_index(&inputs, trains, now);
+        // Actualité locale : les titres des 3 dernières heures, un événement par titre (gravité 1, à noter).
+        // Pas signalée « muette » quand elle n'a pas démarré : c'est une option, pas une alerte officielle.
+        if let Some(events) = news_events(now) {
+            index.located.extend(events);
+        }
+        index
     })
     .await
     .map_err(|e| e.to_string())?;

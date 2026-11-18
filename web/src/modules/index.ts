@@ -6,6 +6,7 @@
 import type { LayerModule } from '../core/module';
 import { aerialPhotos } from './aerialPhotos';
 import { accidents } from './accidents';
+import { actualite } from './actualite';
 import { air } from './air';
 import { bikes } from './bikes';
 import { buildingShadows } from './buildingShadows';
@@ -45,7 +46,7 @@ import { wind } from './wind';
 export const MODULES: LayerModule[] = [
   trains, railways, isochrones, traffic, planes, ships, transit, bikes, parkings,
   floods, rivers, tides, weatherAlerts, air, fires, earthquakes,
-  power, chargers, fuel, population, couverture, immobilier, elections,
+  power, chargers, fuel, population, couverture, immobilier, elections, actualite,
   dayNight, buildingShadows, satellites, jamming, rain, lightning, satelliteImagery, wind,
   aerialPhotos, lidar, photoreal, cameras, monuments, accidents,
 ];

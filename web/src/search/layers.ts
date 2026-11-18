@@ -34,6 +34,7 @@ const SYNONYMS: Record<string, string> = {
   vent: 'rafales meteo',
   parkings: 'parking parkings stationnement garer places libres parc relais',
   cameras: 'camera cameras webcam webcams videoprotection videosurveillance surveillance cctv',
+  actualite: 'actualite locale presse journal titres info nouvelles article france 3 ici france bleu',
   elections: 'vote scrutin presidentielle europeennes legislatives resultats bureau de vote participation',
 };
 
