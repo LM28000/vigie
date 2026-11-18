@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Recherche : carburants et objets nommés
+
+- **Audit** : la recherche ne connaissait ni les stations-service (« e85 », « sp95 », « gazole » ne donnaient rien, ou seulement un réglage de couche), ni les stations de mesure des rivières, tronçons Vigicrues, marégraphes, monuments, satellites, qualité de l'air par commune, vigilance par département, séismes.
+- **Carburants** (`web/src/search/fuel.ts`, `fuelQuery.ts`) : E85, SP95, SP98, E10 (« sp95-e10 »), gazole (gasoil, diesel, B7), GPL(c), « superéthanol », « essence » (E10), avec variantes de saisie, suivis d'un lieu (commune, département ou code postal) ; stations classées par prix avec distance, fiche ouverte et couche réglée au choix. Le SP95 devient un réglage de la couche. Couche jamais chargée : un résultat l'affiche, réglée sur le carburant.
+- **Autres fournisseurs** : eau (rivières, Vigicrues, marées), monuments, satellites, et air, vigilance, séismes (mot-clé requis) ; nouveaux types de résultats et filtres. Synonymes de couches élargis (carburants, crues, vigilance, séismes, électricité et régions, marées, rivières, monuments, couverture mobile, immobilier, photoréaliste, satellite du jour, etc.). Index préparés hors frappe (`warm`), aucune requête à la frappe.
+- **Tests** : `node --test web/scripts/recherche.test.mjs`.
+
 ## 17 novembre 2026 — Zones surveillées (veille) et orages
 
 - **Veille** : jusqu'à 12 zones (cercle, polygone, commune, département) ; Vigie prévient dans l'application quand il s'y passe quelque chose (vigilance orange ou rouge, crue, rivière en forte montée, incendie, séisme ressenti, brouillage GPS, avion militaire, train supprimé ou très en retard à une gare de la zone). Avis discret, liste des alertes, pastille, compteur dans le titre, son facultatif ; `Notification` seulement en contexte sûr (le site est en HTTP). Dédoublonnage par identifiant d'événement, zones gardées dans le navigateur et dans l'adresse (`veille=`), version téléphone (onglet de la feuille).

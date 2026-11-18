@@ -21,7 +21,7 @@ import { selectionRing } from './symbols';
 const EXPORT_URL =
   'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/exports/json';
 
-const FUELS = [
+export const FUELS = [
   { id: 'gazole', label: 'Gazole', short: 'Gazole' },
   { id: 'e10', label: 'SP95-E10', short: 'E10' },
   { id: 'sp98', label: 'SP98', short: 'SP98' },
@@ -29,9 +29,9 @@ const FUELS = [
   { id: 'e85', label: 'E85 (superéthanol)', short: 'E85' },
   { id: 'gplc', label: 'GPL', short: 'GPL' },
 ] as const;
-type FuelId = (typeof FUELS)[number]['id'];
-/** Carburants proposés dans le réglage (le SP95 est rare : il n'apparaît que dans les fiches). */
-const SELECTABLE: FuelId[] = ['gazole', 'e10', 'sp98', 'e85', 'gplc'];
+export type FuelId = (typeof FUELS)[number]['id'];
+/** Carburants proposés dans le réglage (le SP95, rare, en dernier). */
+const SELECTABLE: FuelId[] = ['gazole', 'e10', 'sp98', 'e85', 'gplc', 'sp95'];
 
 /** Un prix plus vieux que ça n'est plus fiable (station fermée, oubli de mise à jour…). */
 const MAX_PRICE_AGE_MS = 7 * 24 * 3600_000;
@@ -46,7 +46,7 @@ type ApiStation = {
 } & Partial<Record<`${FuelId}_prix`, number | null>> &
   Partial<Record<`${FuelId}_maj`, string | null>>;
 
-interface Station {
+export interface Station {
   id: number;
   lon: number;
   lat: number;
@@ -57,7 +57,7 @@ interface Station {
   prices: Partial<Record<FuelId, { price: number; updated: number }>>;
 }
 
-interface FuelData {
+export interface FuelData {
   stations: Station[];
   byId: Map<number, Station>;
   /** Prix récents de chaque carburant, triés : pour les classes de couleur et le classement. */
@@ -152,7 +152,7 @@ async function loadFuel(signal: AbortSignal): Promise<FuelData> {
 }
 
 /** Prix récent d'une station pour un carburant, sinon `undefined`. */
-function recentPrice(station: Station, fuel: FuelId): number | undefined {
+export function recentPrice(station: Station, fuel: FuelId): number | undefined {
   const entry = station.prices[fuel];
   return entry && Date.now() - entry.updated < MAX_PRICE_AGE_MS ? entry.price : undefined;
 }
