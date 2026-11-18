@@ -43,7 +43,7 @@ use serde_json::{Value, json};
 use super::*;
 
 /// Les types que le serveur sait évaluer (le séisme est évalué par le site).
-pub const TYPES: [&str; 9] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train", "avalanche", "evenement"];
+pub const TYPES: [&str; 10] = ["vigilance", "crue", "montee", "incendie", "brouillage", "avion", "train", "avalanche", "evenement", "actualite"];
 
 const MAX_ZONES: usize = 12;
 const MAX_VERTICES: usize = 500;
@@ -178,7 +178,7 @@ impl Zone {
         }
         let types: HashSet<&'static str> = if input.types.is_empty() {
             // Les événements publics ne sont surveillés que sur demande expresse.
-            TYPES.iter().copied().filter(|t| *t != "evenement").collect()
+            TYPES.iter().copied().filter(|t| *t != "evenement" && *t != "actualite").collect()
         } else {
             TYPES.iter().copied().filter(|t| input.types.iter().any(|wanted| wanted == t)).collect()
         };
@@ -605,6 +605,31 @@ fn add_public_events(index: &mut Index, now: i64) {
     }));
 }
 
+/// Titres d'actualité locale des 3 dernières heures (au plus 400), posés sur leur commune (ou le milieu de leur département).
+fn news_events(now: i64) -> Option<Vec<Located>> {
+    let news = crate::actualite::recent(now, 3 * 3600, 400)?;
+    Some(
+        news.into_iter()
+            .map(|n| {
+                Point {
+                    kind: "actualite",
+                    id: n.id,
+                    severity: 1,
+                    title: n.title,
+                    detail: format!("{} · {}", n.place_name, n.source),
+                    lon: n.lon,
+                    lat: n.lat,
+                    time: Some(n.t),
+                    module: "actualite",
+                    selection: json!({ "place": n.place }),
+                    zoom: 11.0,
+                }
+                .located(None)
+            })
+            .collect(),
+    )
+}
+
 pub fn build_index(inputs: &Inputs, trains: Option<Vec<Located>>, now: i64) -> Index {
     let mut index = Index { generated_at: now, ..Index::default() };
     match vigilance_events(&inputs.vigilance, now) {
@@ -683,6 +708,11 @@ async fn current_index(state: AppState) -> Result<Arc<Index>, String> {
         let trains = state.realtime().map(|realtime| train_events(&state.network(), &realtime, now));
         let mut index = build_index(&inputs, trains, now);
         add_public_events(&mut index, now);
+        // Actualité locale : les titres des 3 dernières heures, un événement par titre (gravité 1, à noter).
+        // Pas signalée « muette » quand elle n'a pas démarré : c'est une option, pas une alerte officielle.
+        if let Some(events) = news_events(now) {
+            index.located.extend(events);
+        }
         index
     })
     .await

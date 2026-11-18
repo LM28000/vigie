@@ -37,6 +37,7 @@ const TYPE_ICONS: Record<EventType, string> = {
   train: 'trains',
   avalanche: 'neige',
   evenement: 'evenements',
+  actualite: 'actualite',
 };
 
 /** Vigilance et crues disent leur gravité par une couleur officielle ; le reste, par un mot. */

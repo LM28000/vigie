@@ -50,6 +50,7 @@ const SYNONYMS: Record<string, string> = {
   photos: 'photos aeriennes anciennes remonter le temps ign histoire',
   isochrones: 'isochrone isochrones temps de trajet accessibilite zone atteignable',
   evenements: 'evenement evenements concert concerts spectacle spectacles exposition expositions marche brocante festival fete sortie sorties agenda animation',
+  actualite: 'actualite locale presse journal titres info nouvelles article france 3 ici france bleu',
   elections: 'vote scrutin presidentielle europeennes legislatives resultats bureau de vote participation',
 };
 

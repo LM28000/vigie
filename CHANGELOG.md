@@ -24,6 +24,15 @@ Historique du projet, regroupé par phase et par date, reconstruit à partir de 
 - **Corrections de données** : « Que faire à Paris » place les événements non localisés au même point du centre de Paris (écartés) et donne des heures locales avec un décalage faux (ignoré) ; les dates des fiches ne sont plus rognées à la fenêtre ; la fiche se redessine à l'arrivée du détail même horloge en pause (`web/src/core/infoRefresh.ts`).
 - **Serveur** : `server/src/events.rs`, `GET /api/evenements` et `GET /api/evenements/fiche`. Variables `DATATOURISME_FLUX_URL` et `EVENEMENTS_SOURCES`.
 
+## 18 novembre 2026 — Actualité locale
+
+- **Couche « Actualité locale »** : les titres de la presse régionale et du service public, placés sur la commune dont ils parlent. Un point par commune (taille et nombre = titres), regroupement des communes voisines de loin, anneau pour un titre rattaché à un département seul. Fiche : heure, titre (lien vers l'article chez l'éditeur), source. Période 3 h / 24 h / 3 jours comptée depuis l'instant de la frise (rejeu du passé sur trois jours). Recherche par commune ou par mot d'un titre. Option « Actualité locale » dans la veille (désactivée par défaut).
+- **Droit d'auteur** : seuls le titre, l'adresse, la source et l'heure sont gardés et servis ; jamais de chapô, de texte, d'image ni de page d'article. `robots.txt` lu et respecté, `User-Agent` du projet, un fil par 15 minutes au plus avec `If-Modified-Since`, une requête toutes les 10 secondes.
+- **Serveur** : `server/src/actualite.rs` (relevé, stockage de 3 jours, `GET /api/actualite`), `actualite/flux.json` (71 fils : France 3 Régions, ICI, quotidiens régionaux, actu.fr), `actualite/lieux.rs` (35 000 communes de geo.api.gouv.fr ; adresse de l'article, puis nom de commune dans le titre, puis département). Ouest-France (robots.txt), Sud Ouest, La Voix du Nord et d'autres (accès refusé) écartés. Mode `--actualite-seule` pour tester sans le reste. Pas de nouvelle dépendance.
+- **Site** : module `actualite`, lignes de tableau à lien (`InfoRow.href`) et tableau en liste (`InfoTable.layout`), fournisseur de recherche, jeton de couleur `actualite-1`.
+- **Pas de rubrique dans « Aujourd'hui »** : les « communes dont on parle le plus » ne sont que les plus grandes villes et les sièges des rédactions régionales : trop bruité pour être utile.
+- **Tests** : tests Rust de la localisation, de la lecture RSS/Atom, du `robots.txt` et des filtres.
+
 ## 17 novembre 2026 — Zones surveillées (veille) et orages
 
 - **Veille** : jusqu'à 12 zones (cercle, polygone, commune, département) ; Vigie prévient dans l'application quand il s'y passe quelque chose (vigilance orange ou rouge, crue, rivière en forte montée, incendie, séisme ressenti, brouillage GPS, avion militaire, train supprimé ou très en retard à une gare de la zone). Avis discret, liste des alertes, pastille, compteur dans le titre, son facultatif ; `Notification` seulement en contexte sûr (le site est en HTTP). Dédoublonnage par identifiant d'événement, zones gardées dans le navigateur et dans l'adresse (`veille=`), version téléphone (onglet de la feuille).

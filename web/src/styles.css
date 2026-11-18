@@ -1039,6 +1039,42 @@ p {
   white-space: nowrap;
 }
 
+/* Liste de titres (actualité locale) : le texte passe à la ligne, la source est en retrait. */
+.info__table--list td,
+.info__table--list th {
+  padding-right: var(--space-3);
+  text-align: left;
+  white-space: normal;
+  font-variant-numeric: normal;
+}
+
+.info__table--list td:first-child,
+.info__table--list th:first-child {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-faint);
+}
+
+.info__table--list td:last-child,
+.info__table--list th:last-child {
+  padding-right: 0;
+  text-align: left;
+  white-space: normal;
+  color: var(--ui-faint);
+  font-size: 12px;
+}
+
+.row__link {
+  color: var(--ui-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ui-line);
+  text-underline-offset: 2px;
+}
+
+.row__link:hover {
+  text-decoration-color: currentColor;
+}
+
 /* Pastille d'une ligne de transport (RER B, Métro 14, Car BreizhGo 7) : aux couleurs officielles quand on les a. */
 .line-badge {
   display: inline-block;

@@ -196,7 +196,7 @@ function LineBadge({ text, color, textColor }: { text: string; color?: string; t
 
 function Table({ table, onSelect }: { table: InfoTable; onSelect: (value: unknown) => void }) {
   return (
-    <section className="info__table">
+    <section className={table.layout === 'list' ? 'info__table info__table--list' : 'info__table'}>
       <h3 className="kicker">{table.title}</h3>
       {table.rows.length === 0 ? (
         <p className="info__empty">{table.empty ?? 'Rien à afficher.'}</p>
@@ -229,7 +229,13 @@ function Table({ table, onSelect }: { table: InfoTable; onSelect: (value: unknow
                 {row.cells.map((cell, j) => (
                   <td key={j} className={NUMERIC_CELL.test(cell) ? 'num' : undefined}>
                     {j === 1 && row.badge && <LineBadge {...row.badge} />}
-                    {cell}
+                    {row.href && j === row.cells.length - 1 ? (
+                      <a className="row__link" href={row.href} target="_blank" rel="noopener noreferrer">
+                        {cell}
+                      </a>
+                    ) : (
+                      cell
+                    )}
                   </td>
                 ))}
               </tr>

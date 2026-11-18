@@ -14,7 +14,7 @@
  */
 
 /** Les types d'événements (ceux du serveur, plus le séisme, évalué par le site). */
-export const EVENT_TYPES = ['vigilance', 'crue', 'montee', 'incendie', 'seisme', 'brouillage', 'avion', 'train', 'avalanche', 'evenement'] as const;
+export const EVENT_TYPES = ['vigilance', 'crue', 'montee', 'incendie', 'seisme', 'brouillage', 'avion', 'train', 'avalanche', 'evenement', 'actualite'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const TYPE_LABELS: Record<EventType, string> = {
@@ -28,10 +28,11 @@ export const TYPE_LABELS: Record<EventType, string> = {
   train: 'Train très en retard ou supprimé',
   avalanche: 'Risque d’avalanche fort (4 ou 5)',
   evenement: 'Événement public (dans les 6 h)',
+  actualite: 'Actualité locale (titres de presse)',
 };
 
-/** Ce qu'on surveille par défaut : tout, sauf les avions militaires (il y en a presque toujours un en vol) et les événements publics (des dizaines par jour). */
-export const DEFAULT_TYPES: EventType[] = EVENT_TYPES.filter((type) => type !== 'avion' && type !== 'evenement');
+/** Ce qu'on surveille par défaut : tout, sauf les avions militaires (il y en a presque toujours un en vol), les événements publics (des dizaines par jour) et l'actualité locale (un titre de presse n'est pas une alerte). */
+export const DEFAULT_TYPES: EventType[] = EVENT_TYPES.filter((type) => type !== 'avion' && type !== 'evenement' && type !== 'actualite');
 
 /** Gravité de 1 à 4 (à noter, notable, important, critique), la même que la synthèse. */
 export type Severity = 1 | 2 | 3 | 4;

@@ -237,6 +237,8 @@ export interface InfoTable {
   rows: InfoRow[];
   /** Texte affiché quand le tableau est vide. */
   empty?: string;
+  /** `list` : une liste de lignes de texte (titres d'articles) : seule la première colonne reste sur une ligne, les autres passent à la ligne, alignées à gauche. */
+  layout?: 'list';
 }
 
 export interface InfoRow {
@@ -245,6 +247,8 @@ export interface InfoRow {
   tone?: 'muted' | 'current' | 'alert';
   /** Sélection à ouvrir quand on clique sur la ligne (dans le même module). */
   select?: unknown;
+  /** Lien externe (ouvert dans un nouvel onglet) : la dernière cellule de la ligne en est le texte (un titre d'article, par exemple). */
+  href?: string;
   /** Pastille de ligne (« RER B », « Métro 14 ») en tête de la deuxième cellule, aux couleurs officielles quand on les connaît. */
   badge?: { text: string; color?: string; textColor?: string };
 }
