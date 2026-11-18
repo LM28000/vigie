@@ -1,0 +1,5 @@
+# Projet généré par Bubblewrap à partir de twa-manifest.json : seul ce fichier et la notice sont suivis.
+*
+!.gitignore
+!twa-manifest.json
+!README.md
