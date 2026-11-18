@@ -113,19 +113,25 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         // Une adresse d'API inconnue est une erreur, pas la page du site.
         .route("/api/{*rest}", get(|| async { (StatusCode::NOT_FOUND, "adresse d'API inconnue") }));
     if let Some(dir) = web_dir {
-        // Les fichiers de assets/ portent une empreinte de leur contenu dans leur nom : ils ne
-        // changent jamais. La page d'accueil, elle, est revérifiée à chaque visite pour
-        // qu'une mise à jour du site soit vue aussitôt.
-        let immutable =
-            SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
-        let revalidate = SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
-        let pages = ServeDir::new(dir).fallback(ServeFile::new(dir.join("index.html")));
-        router = router
-            .nest_service("/assets", get_service(ServeDir::new(dir.join("assets"))).layer(immutable))
-            .fallback_service(get_service(pages).layer(revalidate));
+        router = router.merge(site(dir));
     }
     router = router.merge(crate::tiles::serve::router(state.tiles().clone()));
     router.layer(CompressionLayer::new()).layer(TraceLayer::new_for_http()).with_state(state)
+}
+
+/// Le site construit : `assets/` (nommés d'après leur contenu : ils ne changent jamais, cache d'un an),
+/// `.well-known/` (liens d'application Android, jamais remplacé par la page d'accueil), et le reste
+/// (page d'accueil, `sw.js`, `manifest.webmanifest`, icônes) revérifié à chaque visite pour qu'une
+/// mise à jour du site, et celle du service worker, soit vue aussitôt.
+fn site<S: Clone + Send + Sync + 'static>(dir: &std::path::Path) -> Router<S> {
+    let immutable =
+        SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
+    let revalidate = SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    let pages = ServeDir::new(dir).fallback(ServeFile::new(dir.join("index.html")));
+    Router::new()
+        .nest_service("/assets", get_service(ServeDir::new(dir.join("assets"))).layer(immutable))
+        .nest_service("/.well-known", get_service(ServeDir::new(dir.join(".well-known"))).layer(revalidate.clone()))
+        .fallback_service(get_service(pages).layer(revalidate))
 }
 
 #[derive(Deserialize)]
@@ -639,5 +645,73 @@ async fn extras_stops(State(state): State<AppState>, Path(version): Path<String>
         )
             .into_response(),
         _ => (StatusCode::NOT_FOUND, "version des arrêts périmée : relancer l'isochrone").into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sert un faux dossier `web/dist` sur un port libre et rend l'adresse du serveur.
+    async fn serve_site(dir: &std::path::Path) -> String {
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        std::fs::create_dir_all(dir.join(".well-known")).unwrap();
+        std::fs::write(dir.join("index.html"), "<!doctype html><title>Vigie</title>").unwrap();
+        std::fs::write(dir.join("sw.js"), "self.addEventListener('fetch', () => {});").unwrap();
+        std::fs::write(dir.join("manifest.webmanifest"), r#"{"name":"Vigie"}"#).unwrap();
+        std::fs::write(dir.join("assets/index-abc123.js"), "console.log(1)").unwrap();
+        std::fs::write(dir.join(".well-known/assetlinks.json"), "[]").unwrap();
+        let app: Router = site(dir);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}")
+    }
+
+    async fn get_header(base: &str, path: &str, name: &str) -> (u16, Option<String>) {
+        let response = reqwest::get(format!("{base}{path}")).await.unwrap();
+        let value = response.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+        (response.status().as_u16(), value)
+    }
+
+    #[tokio::test]
+    async fn le_site_est_servi_avec_les_bons_types_et_caches() {
+        let dir = std::env::temp_dir().join(format!("vigie-site-{}", std::process::id()));
+        let base = serve_site(&dir).await;
+
+        let (status, kind) = get_header(&base, "/manifest.webmanifest", "content-type").await;
+        assert_eq!((status, kind.as_deref()), (200, Some("application/manifest+json")));
+        assert_eq!(get_header(&base, "/manifest.webmanifest", "cache-control").await.1.as_deref(), Some("no-cache"));
+
+        let (status, kind) = get_header(&base, "/sw.js", "content-type").await;
+        assert_eq!(status, 200);
+        assert!(kind.unwrap().contains("javascript"));
+        assert_eq!(get_header(&base, "/sw.js", "cache-control").await.1.as_deref(), Some("no-cache"));
+
+        assert_eq!(get_header(&base, "/", "cache-control").await.1.as_deref(), Some("no-cache"));
+        assert_eq!(
+            get_header(&base, "/assets/index-abc123.js", "cache-control").await.1.as_deref(),
+            Some("public, max-age=31536000, immutable")
+        );
+
+        // Un chemin du site (adresse partagée, rechargement) rend la page d'accueil.
+        let body = reqwest::get(format!("{base}/une/page")).await.unwrap().text().await.unwrap();
+        assert!(body.contains("<title>Vigie</title>"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn les_liens_d_application_android_sont_servis_en_json() {
+        let dir = std::env::temp_dir().join(format!("vigie-wellknown-{}", std::process::id()));
+        let base = serve_site(&dir).await;
+
+        let response = reqwest::get(format!("{base}/.well-known/assetlinks.json")).await.unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+        assert_eq!(response.text().await.unwrap(), "[]");
+
+        // Un fichier absent de .well-known est une erreur, pas la page d'accueil.
+        assert_eq!(get_header(&base, "/.well-known/inconnu.json", "content-type").await.0, 404);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

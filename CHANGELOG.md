@@ -2,6 +2,15 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Application installable (PWA), prête pour une TWA
+
+- **Manifeste** `web/public/manifest.webmanifest` (« Vigie, la France en direct », `standalone`, `id` et `scope` `/`, couleurs de l'interface sombre) lié avec `crossorigin="use-credentials"` pour passer Cloudflare Access ; `viewport-fit=cover`, `theme-color`, balises iOS, marges des bords tenant compte des encoches en paysage.
+- **Icônes** (`web/public/icons`) : 192 et 512, 512 maskable (marque dans la zone de sécurité), 180 pour iOS, 512 monochrome ; sources `design/logos/vigie-icon-*.svg`, script `web/scripts/icones.sh` (`sips`, sans dépendance).
+- **Service worker** écrit à la main (`web/pwa/sw.js`) et rempli au build par un plugin Vite local (`web/pwa/plugin.mjs`) : coque précachée (page et `assets/`), version tirée du contenu, navigation réseau d'abord avec repli sur la coque, jamais d'`/api`, de tuiles ni de ressources tierces en cache, jamais de réponse redirigée ou non 200 gardée ; mise à jour proposée (« Nouvelle version disponible — Recharger »), jamais forcée. Enregistré seulement en production, en contexte sûr.
+- **Interface** : entrée « Installer l'application » dans le catalogue (`beforeinstallprompt`, aide *Partager → Sur l'écran d'accueil* sur iOS, absente une fois installée), avis « Hors ligne » (`web/src/core/pwa.ts`, `web/src/ui/Install.tsx`).
+- **Serveur** : `site()` regroupe le service du site (`assets/` immuables, reste en `no-cache`) et sert `/.well-known/` (404 si absent, pas la page d'accueil) ; `web/public/.well-known/assetlinks.json` vide (`[]`) en attendant l'empreinte de Play. Tests : types et en-têtes.
+- **Tests** : `web/scripts/pwa.test.mjs` (plugin, comportement du service worker dans un bac à sable, détection iOS).
+
 ## 18 novembre 2026 — Autour de moi : position, recherche et Veille
 
 - **Position** (`web/src/core/position.ts`, `positionLogic.ts`) : `navigator.geolocation` seulement en contexte sûr et sur clic ; dernière position en mémoire seule (périmée après 30 min pour le classement), drapeau « déjà accepté » en `localStorage` sans coordonnées ; refus, indisponible et délai dépassé en messages français ; `watchPosition` seulement quand le suivi est coché, coupé à la fermeture du panneau. Rien n'est envoyé, journalisé ni écrit dans l'adresse (la carte se centre sur la position arrondie à environ 1 km).

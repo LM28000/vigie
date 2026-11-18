@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0e121b" />
     <title>Vigie, la France en direct</title>
     <meta name="description" content="Vigie montre la France en direct : trains, avions, bateaux, météo, territoire, et le passé qu'on rejoue." />
@@ -14,6 +14,13 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Vigie, la France en direct" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- crossorigin="use-credentials" : derrière Cloudflare Access le manifeste doit partir avec le cookie, sinon il est redirigé vers la page de connexion. -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Vigie" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   </head>
   <body>
     <div id="root"></div>

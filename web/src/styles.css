@@ -51,7 +51,8 @@
 
   /* Noms historiques, pour le code qui s'en sert encore : ils pointent vers les jetons ci-dessus. */
   --ui-radius: var(--radius-lg);
-  --ui-edge: var(--space-7);
+  /* Marge des bords : jamais sous l'encoche en paysage (application installée, `viewport-fit=cover`). */
+  --ui-edge: max(var(--space-7), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   --bg: var(--ui-glass);
   --panel-bg: var(--ui-glass);
   --panel-border: var(--ui-line);
@@ -1865,7 +1866,7 @@ p {
 
 @media (max-width: 719.98px) {
   :root {
-    --ui-edge: 12px;
+    --ui-edge: max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   }
 
   .zone-tl {
@@ -3271,4 +3272,100 @@ p {
   .veille-toast {
     animation: none;
   }
+}
+
+/* --- Installation de l'application et avis de l'application (hors ligne, nouvelle version) --- */
+
+.install {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.install__button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-md);
+  background: var(--ui-control);
+  color: var(--ui-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.install__button:hover {
+  background: var(--ui-control-hover);
+}
+
+.install__text {
+  display: grid;
+  gap: 1px;
+}
+
+.install__text b {
+  font-weight: 600;
+}
+
+.install__text span {
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.install__help {
+  margin: 0;
+  padding: 0 var(--space-4);
+  color: var(--ui-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.install__help b {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+
+/* Au centre en bas, au-dessus de la frise ; au-dessus de la feuille sur téléphone. */
+.pwa-notices {
+  position: absolute;
+  z-index: 9;
+  bottom: 96px;
+  left: 50%;
+  display: grid;
+  gap: var(--space-4);
+  width: max-content;
+  max-width: min(420px, calc(100% - 2 * var(--ui-edge)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.pwa-notices--phone {
+  bottom: calc(var(--sheet-h, 68px) + 12px);
+  max-width: calc(100% - 2 * var(--ui-edge));
+}
+
+.pwa-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.pwa-notice__action {
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ui-primary);
+  color: var(--ui-primary-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pwa-notice__action:hover {
+  filter: brightness(1.07);
 }
