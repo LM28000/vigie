@@ -2,6 +2,12 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 18 novembre 2026 — Neige : stations de mesure lisibles
+
+- **Stations** (`web/src/modules/neige.ts`, `design/tokens.ts`) : vues pour la première fois avec de vraies données (68 stations). L'ancien bleu `NEIGE_SOL` était celui des TER et le point creux à 0 cm faisait du bruit : rampe rose en quatre classes (1-9, 10-29, 30-69, 70 cm et plus) avec halo blanc et liseré sombre (lisible sur les aplats de risque, jour et nuit) ; 0 cm : petit rond gris sans étiquette, affiché dès le zoom 8 ; étiquettes en cm sélectives (zoom 7 : 30 cm et plus ; 8,5 : toutes celles qui ont de la neige, les plus hautes prioritaires) ; mesure de plus de 6 h estompée ; légende par classe ; fiche avec heure de Paris et « il y a X h ».
+- **Noms** (`server/src/neige.rs`, `title_case`) : « Les Ecrins-nivose » devient « Les Écrins (Nivôse) » ; « Saint », élisions (« d'Arène »), mots outils en minuscules, suffixes techniques `_sapc` et `-clim` retirés, quelques accents. Côté serveur : un seul endroit pour la carte, la recherche et la synthèse. Test Rust `noms_de_stations_lisibles`.
+- **Recherche** (`web/src/search/neige.ts`) : une station se trouve par son nom (« écrins », « nivôse »), « neige » ne remonte que celles qui ont de la neige.
+
 ## 18 novembre 2026 — Autour de moi : position, recherche et Veille
 
 - **Position** (`web/src/core/position.ts`, `positionLogic.ts`) : `navigator.geolocation` seulement en contexte sûr et sur clic ; dernière position en mémoire seule (périmée après 30 min pour le classement), drapeau « déjà accepté » en `localStorage` sans coordonnées ; refus, indisponible et délai dépassé en messages français ; `watchPosition` seulement quand le suivi est coché, coupé à la fermeture du panneau. Rien n'est envoyé, journalisé ni écrit dans l'adresse (la carte se centre sur la position arrondie à environ 1 km).

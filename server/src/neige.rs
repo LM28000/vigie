@@ -386,18 +386,95 @@ pub fn parse_station_list(body: &str) -> HashMap<String, (String, Option<i32>)> 
         .collect()
 }
 
-/// « VAL D ISERE » → « Val d'Isère » serait trop ambitieux : on met seulement une majuscule à chaque mot.
+/// Mots que le CSV écrit sans accent et que l'on rétablit (liste courte, pour les stations de montagne rencontrées).
+const ACCENTS: &[(&str, &str)] = &[
+    ("ecrins", "Écrins"),
+    ("orcieres", "Orcières"),
+    ("cervieres", "Cervières"),
+    ("peone", "Péone"),
+    ("veran", "Véran"),
+    ("bellecote", "Bellecôte"),
+    ("arene", "Arène"),
+    ("isere", "Isère"),
+    ("radome", "Radôme"),
+];
+
+/// Mots outils écrits en minuscules sauf en tête de nom.
+const SMALL_WORDS: &[&str] = &["de", "des", "du", "d", "la", "le", "les", "en", "sur", "sous", "aux", "au", "et", "l"];
+
+fn capitalized(word: &str) -> String {
+    let lower = word.to_lowercase();
+    if let Some((_, with)) = ACCENTS.iter().find(|(plain, _)| *plain == lower) {
+        return (*with).to_string();
+    }
+    let mut chars = lower.chars();
+    chars.next().map(|first| first.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+}
+
+/// Un mot du nom (sans espace ni trait d'union) : « D'ARENE » → « d'Arène », « ST » → « Saint ».
+fn name_word(word: &str, first: bool) -> String {
+    if let Some((prefix, rest)) = word.split_once('\'') {
+        let prefix = prefix.to_lowercase();
+        let head = if first { capitalized(&prefix) } else { prefix };
+        return format!("{head}'{}", capitalized(rest));
+    }
+    match word.to_lowercase().as_str() {
+        "st" => "Saint".to_string(),
+        "ste" => "Sainte".to_string(),
+        small if !first && SMALL_WORDS.contains(&small) => small.to_string(),
+        _ => capitalized(word),
+    }
+}
+
+/// Le nom d'une station du CSV Météo-France, en majuscules (ou déjà à demi mis en forme) : « LES ECRINS-NIVOSE » →
+/// « Les Écrins (Nivôse) », « LA PLAGNE_SAPC » → « La Plagne ».
+///
+/// Prudent : seuls les traits sûrs sont traités (casse, « St » → « Saint », « d'/l' » élidés, mots outils en minuscules,
+/// suffixe `-nivose` des stations automatiques de haute montagne, suffixes techniques `_sapc` et `-clim`, quelques accents
+/// courants). Un nom inconnu reste lisible, simplement sans accent.
 fn title_case(name: &str) -> String {
-    name.split(' ')
-        .map(|w| {
-            let mut chars = w.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut base = name.trim().to_string();
+    // Suffixes techniques (réseau de mesure) : sans intérêt pour lire la carte.
+    if let Some(i) = base.find('_') {
+        base.truncate(i);
+    }
+    let mut nivose = false;
+    let lower = base.to_lowercase();
+    for (suffix, is_nivose) in [("-nivose", true), (" nivose", true), ("-clim", false)] {
+        if lower.ends_with(suffix) {
+            base.truncate(base.len() - suffix.len());
+            nivose = is_nivose;
+            break;
+        }
+    }
+    let base = base.replace("- ", " - ").replace(" -", " - ").replace("  ", " ");
+    let tokens: Vec<&str> = base.split_whitespace().collect();
+    let mut out = String::new();
+    let mut first = true;
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = tokens[i];
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        // « D ISERE » → « d'Isère » : un « d » ou « l » isolé devant une voyelle est une élision.
+        let elided = matches!(token.to_lowercase().as_str(), "d" | "l")
+            && tokens.get(i + 1).is_some_and(|n| n.chars().next().is_some_and(|c| "aeiouyhAEIOUYH".contains(c)));
+        if elided {
+            let head = if first { token.to_uppercase() } else { token.to_lowercase() };
+            out.push_str(&format!("{head}'{}", capitalized(tokens[i + 1])));
+            i += 2;
+        } else {
+            let parts: Vec<String> = token.split('-').enumerate().map(|(k, part)| name_word(part, first && k == 0)).collect();
+            out.push_str(&parts.join("-"));
+            i += 1;
+        }
+        first = false;
+    }
+    if nivose {
+        out.push_str(" (Nivôse)");
+    }
+    out
 }
 
 // --- L'état ---
@@ -985,6 +1062,35 @@ mod tests {
         assert_eq!(mountain_stations(&names), vec!["20148001".to_string(), "74056001".to_string()]);
     }
 
+    #[test]
+    fn noms_de_stations_lisibles() {
+        let cas = [
+            ("LES ECRINS-NIVOSE", "Les Écrins (Nivôse)"),
+            ("Les Ecrins-nivose", "Les Écrins (Nivôse)"),
+            ("Bellecote-nivose", "Bellecôte (Nivôse)"),
+            ("Col De Porte-nivose", "Col de Porte (Nivôse)"),
+            ("Aiguilles Rouges-nivose", "Aiguilles Rouges (Nivôse)"),
+            ("Lac D'ardiden-nivose", "Lac d'Ardiden (Nivôse)"),
+            ("Port D'aula-nivose", "Port d'Aula (Nivôse)"),
+            ("St Hilaire-nivose", "Saint Hilaire (Nivôse)"),
+            ("Villar D'arene", "Villar d'Arène"),
+            ("Alpe-d'huez", "Alpe-d'Huez"),
+            ("Col-des-saisies", "Col-des-Saisies"),
+            ("St-martin De Belleville", "Saint-Martin de Belleville"),
+            ("Bourg St Maurice", "Bourg Saint Maurice"),
+            ("St Christophe En Oisans_sapc", "Saint Christophe en Oisans"),
+            ("La Plagne_sapc", "La Plagne"),
+            ("Bessans-clim", "Bessans"),
+            ("La Mure- Radome", "La Mure - Radôme"),
+            ("VAL D ISERE", "Val d'Isère"),
+            ("Isola 2000", "Isola 2000"),
+            ("  Chamonix ", "Chamonix"),
+        ];
+        for (brut, attendu) in cas {
+            assert_eq!(title_case(brut), attendu, "{brut}");
+        }
+    }
+
     const MONT_BLANC: &str = include_str!("testdata/bra_mont_blanc.xml");
     const PAYS_BASQUE: &str = include_str!("testdata/bra_pays_basque.xml");
 
@@ -1084,7 +1190,7 @@ mod tests {
     fn decodes_the_station_list() {
         let csv = "Id_station;Id_omm;Nom_usuel;Latitude;Longitude;Altitude;Date_ouverture;Pack\n73054001;;VAL D ISERE;45.45;6.98;1850;1990-01-01;RADOME\n74001002;;CHAMONIX;45.9;6.8;;;\n";
         let list = parse_station_list(csv);
-        assert_eq!(list["73054001"], ("Val D Isere".to_string(), Some(1850)));
+        assert_eq!(list["73054001"], ("Val d'Isère".to_string(), Some(1850)));
         assert_eq!(list["74001002"], ("Chamonix".to_string(), None));
         assert!(parse_station_list("n'importe quoi").is_empty());
     }
