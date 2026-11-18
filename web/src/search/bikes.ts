@@ -8,7 +8,8 @@ const MODULE = 'velos';
 const MAX_RESULTS = 5;
 
 const build = indexed<BikesData, Array<{ text: string; station: Station }>>((data) =>
-  data.stations.map((station) => ({ text: pad(`${station.name} ${station.network}`), station })),
+  // « vélo » et « vélos » y figurent pour que « vélo bastille » trouve la station comme « vélib bastille ».
+  data.stations.map((station) => ({ text: pad(`velo velos ${station.name} ${station.network}`), station })),
 );
 
 export const bikesProvider: Provider = {
