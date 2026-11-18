@@ -496,6 +496,26 @@ const ICONS: Record<Kind, ReactNode> = {
       <path d="M5 12h14M13 6l6 6-6 6" />
     </>
   ),
+  station: (
+    <>
+      <path d="M5 20V5.5A1.5 1.5 0 0 1 6.5 4h6A1.5 1.5 0 0 1 14 5.5V20M4 20h11M5 10h9" />
+      <path d="M14 8.5h2a2 2 0 0 1 2 2V16a1.5 1.5 0 0 0 3 0V9l-2.5-2.5" />
+    </>
+  ),
+  eau: <path d="M12 3.5S6 10 6 14a6 6 0 0 0 12 0c0-4-6-10.5-6-10.5Z" />,
+  monument: <path d="M4 20h16M6 20V10M10 20V10M14 20V10M18 20V10M4 10l8-5.5 8 5.5Z" />,
+  espace: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M4.5 7.5l3 3M16.5 13.5l3 3M7.5 4.5l3 3M13.5 16.5l3 3" />
+    </>
+  ),
+  zone: (
+    <>
+      <path d="M12 4 21 19H3Z" />
+      <path d="M12 10v4M12 16.5v.5" />
+    </>
+  ),
 };
 
 function KindIcon({ kind }: { kind: Kind }) {
