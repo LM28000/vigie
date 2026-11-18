@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- Image de présentation Google Play : 1024 x 500. Rendue en PNG par Playwright (viewport 1024x500, facteur 1) ;
+     voir android/fiche-play/fiche.md. Fond : capture de la carte (fond-carte.png), sans interface. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Vigie, image de présentation</title>
+<style>
+  html, body { margin: 0; width: 1024px; height: 500px; overflow: hidden; background: #0e121b; }
+  body { position: relative; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #f2f4f8; }
+  .fond { position: absolute; inset: 0; background: url(fond-carte.png) center top / cover no-repeat; filter: brightness(1.9) saturate(1.25); }
+  .voile { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14,18,27,.94) 0%, rgba(14,18,27,.78) 34%, rgba(14,18,27,.2) 66%, rgba(14,18,27,0) 100%); }
+  .texte { position: absolute; left: 64px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; gap: 18px; width: 560px; }
+  .marque { display: flex; align-items: center; gap: 22px; }
+  .marque img { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 6px 24px rgba(0,0,0,.5); }
+  h1 { margin: 0; font-size: 92px; line-height: 1; font-weight: 700; letter-spacing: -1px; }
+  p { margin: 0; font-size: 34px; line-height: 1.25; font-weight: 500; color: #dfe4ee; }
+  p b { color: #ff6a5f; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="fond"></div>
+  <div class="voile"></div>
+  <div class="texte">
+    <div class="marque"><img src="icone-512.png" alt=""><h1>Vigie</h1></div>
+    <p>La France en direct, en 3D : trains, avions, météo, territoire.<br><b>Et le passé qu’on rejoue.</b></p>
+  </div>
+</body>
+</html>
