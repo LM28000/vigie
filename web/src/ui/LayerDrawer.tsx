@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { CATEGORY_LABELS, CATEGORY_ORDER, settingOptions, type LayerModule, type LegendItem, type ModuleSetting } from '../core/module';
 import type { ModuleManager, ModuleRuntimeState } from '../core/moduleManager';
-import { SCENES, activeScene, applyScene } from '../core/scenes';
+import { SCENES, activeScene, toggleScene } from '../core/scenes';
 import { TourLauncher } from './Tour';
 import { formatDateTime, formatRelative } from './format';
 import { useModuleStates, useNow } from './hooks';
@@ -97,8 +97,8 @@ export function LayerCatalog({ manager, expandedId, onExpand, autoFocus }: Layer
                   type="button"
                   className={`scene${current?.id === scene.id ? ' scene--on' : ''}`}
                   aria-pressed={current?.id === scene.id}
-                  title="Remplace les couches affichées par cet ensemble"
-                  onClick={() => applyScene(manager, scene)}
+                  title={current?.id === scene.id ? 'Retirer cette scène : ses couches sont masquées' : 'Remplace les couches affichées par cet ensemble'}
+                  onClick={() => toggleScene(manager, scene, current)}
                 >
                   <b>{scene.label}</b>
                   <span>{scene.description}</span>

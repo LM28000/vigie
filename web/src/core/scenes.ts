@@ -119,6 +119,18 @@ export function applyScene(manager: ModuleManager, scene: Scene): void {
 }
 
 /** La scène dont les couches sont exactement celles qui sont affichées (ambiance mise à part), sinon `undefined`. */
+/** Quitte une scène : ses couches sont masquées, seules restent les couches d'ambiance déjà affichées (jour et nuit). */
+export function leaveScene(manager: ModuleManager): void {
+  const snapshot = manager.getSnapshot();
+  manager.setVisibleOnly(AMBIENT.filter((id) => snapshot[id]?.visible));
+}
+
+/** Un clic sur une scène l'applique ; un clic sur la scène déjà affichée la retire. */
+export function toggleScene(manager: ModuleManager, scene: Scene, current: Scene | undefined): void {
+  if (current?.id === scene.id) leaveScene(manager);
+  else applyScene(manager, scene);
+}
+
 export function activeScene(visibleIds: ReadonlySet<string>): Scene | undefined {
   const shown = [...visibleIds].filter((id) => !AMBIENT.includes(id));
   return SCENES.find((scene) => {

@@ -81,7 +81,7 @@ export function ZonePanel({ phone }: { phone: boolean }) {
           <h2 className="info__title">{title}</h2>
           <p className="info__subtitle mono">{area.toLocaleString('fr-FR', { maximumFractionDigits: area < 10 ? 1 : 0 })} km²</p>
         </div>
-        <button type="button" className="icon-button" onClick={() => zoneStore.setPanelOpen(false)} aria-label="Masquer le panneau">
+        <button type="button" className="icon-button" onClick={() => zoneStore.clear()} aria-label="Fermer et effacer la zone" title="Fermer et effacer la zone">
           <Icon name="x" size={16} />
         </button>
       </header>
