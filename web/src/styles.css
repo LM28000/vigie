@@ -1936,6 +1936,17 @@ p {
   }
 }
 
+.catalog__legal {
+  margin: var(--space-5) 0 var(--space-4);
+  text-align: center;
+  font-size: 12px;
+}
+
+.catalog__legal a {
+  color: var(--ui-muted, inherit);
+  text-decoration: underline;
+}
+
 /* --- Visite guidée : bouton du catalogue, panneau de légende --- */
 
 .tour-launch {

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0e121b">
+<meta name="robots" content="noindex">
+<title>Vigie : politique de confidentialité</title>
+<style>
+  :root {
+    --fond: #f6f7fa;
+    --carte: #ffffff;
+    --texte: #1a2030;
+    --discret: #566075;
+    --trait: #dde1ea;
+    --lien: #1f5fd1;
+    --accent: #1f5fd1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #0e121b;
+      --carte: #161b27;
+      --texte: #e8ebf2;
+      --discret: #98a2b8;
+      --trait: #283044;
+      --lien: #8db4ff;
+      --accent: #8db4ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--fond);
+    color: var(--texte);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; padding-top: 1rem; border-top: 1px solid var(--trait); }
+  p, ul { margin: .6rem 0; }
+  ul { padding-left: 1.2rem; }
+  li { margin: .3rem 0; }
+  a { color: var(--lien); }
+  .meta { color: var(--discret); margin: 0 0 1.2rem; }
+  .resume {
+    background: var(--carte);
+    border: 1px solid var(--trait);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .resume p { margin: .3rem 0; }
+  table { width: 100%; border-collapse: collapse; margin: .8rem 0; font-size: .94rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--trait); }
+  th { color: var(--discret); font-weight: 600; }
+  .defile { overflow-x: auto; }
+  code { font: .9em ui-monospace, Menlo, Consolas, monospace; background: var(--carte); padding: 1px 5px; border-radius: 4px; }
+  footer { margin-top: 2rem; color: var(--discret); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Politique de confidentialité de Vigie</h1>
+  <p class="meta">Dernière mise à jour : 18 novembre 2026</p>
+
+  <div class="resume">
+    <p><strong>En bref.</strong> Vigie n’a ni publicité, ni outil de mesure d’audience, ni traceur, et ne crée aucun compte dans l’application. Elle ne vous demande ni nom, ni adresse électronique, ni numéro de téléphone. Votre position, si vous la partagez, reste sur votre appareil. L’accès à l’application passe par un service de connexion (Cloudflare Access et Authentik) qui, lui, utilise votre adresse électronique : voir la section 3.</p>
+  </div>
+
+  <h2>1. Qui est responsable</h2>
+  <p>Vigie (« Vigie, la France en direct », identifiant Android <code>eu.ducray.vigie</code>, site <code>vigie.du-cray.eu</code>) est éditée par Louis-Marie Perret du Cray, responsable du traitement au sens du règlement général sur la protection des données (RGPD).</p>
+  <p>Contact pour toute question ou demande concernant vos données : <strong>CONTACT_A_COMPLETER</strong></p>
+
+  <h2>2. Ce que fait l’application</h2>
+  <p>Vigie affiche sur une carte 3D de la France des données publiques en direct ou rejouées : trains, avions, bateaux, météo, qualité de l’air, énergie, population, immobilier, élections et d’autres couches. Sur Android, l’application est une « Trusted Web Activity » : elle affiche le site <code>vigie.du-cray.eu</code> en plein écran dans Chrome. Elle n’intègre aucune bibliothèque de publicité, de statistiques ou de suivi, et ne demande que des autorisations facultatives, uniquement à votre demande : la position et les notifications.</p>
+
+  <h2>3. Connexion à l’application</h2>
+  <p>L’accès à Vigie est protégé : avant d’ouvrir la carte, vous vous identifiez auprès de <strong>Cloudflare Access</strong>, qui s’appuie sur le service d’identité <strong>Authentik</strong>. Votre identité est votre <strong>adresse électronique</strong> et le secret qui l’accompagne. Ces données sont traitées par ces deux services, pas par le code de Vigie, qui ne les reçoit ni ne les enregistre. À l’issue de la connexion, un cookie de session (notamment <code>CF_Authorization</code>) est posé sur votre appareil pour vous éviter de vous reconnecter à chaque visite ; il est strictement nécessaire à l’accès.</p>
+  <p>Cloudflare et Authentik peuvent conserver des journaux de connexion (adresse électronique, adresse IP, date, résultat) pour la sécurité et le contrôle d’accès. Leurs règles propres s’appliquent : <a href="https://www.cloudflare.com/fr-fr/privacypolicy/" rel="noopener noreferrer">politique de Cloudflare</a>. Ces données servent uniquement à contrôler qui a le droit d’entrer ; elles ne sont ni vendues, ni utilisées pour de la publicité.</p>
+
+  <h2>4. Votre position</h2>
+  <p>La position n’est demandée que lorsque vous touchez « Autour de moi » ou « Surveiller autour de moi ». Rien n’est demandé au chargement de la page ni en arrière-plan.</p>
+  <ul>
+    <li><strong>Elle reste dans votre appareil.</strong> La position exacte est gardée en mémoire le temps de la visite (perdue au rechargement) et n’est écrite nulle part. Aucune requête vers le serveur de Vigie ni vers un service tiers ne la contient. Elle sert à centrer la carte, à placer un repère, à classer plus haut les résultats de recherche proches et à calculer des distances, le tout dans votre navigateur.</li>
+    <li><strong>Un seul cas d’exception, que vous déclenchez.</strong> Si vous choisissez « Surveiller autour de moi », Vigie crée une zone de veille : un cercle dont le centre est votre position <strong>arrondie à environ 1 km</strong>. Cette zone (et non la position exacte) est enregistrée dans votre navigateur et envoyée au serveur de Vigie pour savoir ce qui s’y passe ; le serveur calcule la réponse et ne conserve pas la zone. Elle apparaît aussi dans l’adresse de la page si vous partagez le lien : ne partagez pas ce lien si vous ne souhaitez pas révéler cette zone.</li>
+    <li>Le seul souvenir gardé est un indicateur « vous avez déjà accepté la localisation » (sans coordonnées).</li>
+    <li>Vous pouvez retirer l’autorisation à tout moment dans les réglages d’Android ou de Chrome.</li>
+  </ul>
+
+  <h2>5. Ce qui est stocké sur votre appareil</h2>
+  <p>Vigie utilise le stockage local du navigateur (<code>localStorage</code>) uniquement pour votre confort. Rien n’y est envoyé automatiquement à qui que ce soit.</p>
+  <ul>
+    <li>les couches affichées et leurs réglages ;</li>
+    <li>vos dernières recherches (la liste reste sur l’appareil) ;</li>
+    <li>les zones de veille que vous avez créées, leurs alertes, ce qui a déjà été vu et vos préférences de notification ;</li>
+    <li>le mode de vision choisi (nocturne, thermique…) ;</li>
+    <li>un indicateur « l’accueil a déjà été montré » et l’indicateur de localisation acceptée (section 4).</li>
+  </ul>
+  <p>Vous pouvez tout effacer en supprimant les données du site dans les réglages de Chrome, ou en désinstallant l’application.</p>
+  <p><strong>Mode hors connexion.</strong> Un service worker conserve en cache uniquement la « coque » de l’application (page d’accueil, scripts et styles) pour qu’elle s’ouvre sans réseau. Il ne met en cache ni vos données, ni votre position, ni les réponses des services de données.</p>
+  <p><strong>Notifications.</strong> Si vous les activez dans la Veille, les alertes sont affichées par votre navigateur sur votre appareil. Il n’y a pas de serveur de notifications : aucun identifiant d’appareil n’est collecté.</p>
+
+  <h2>6. Ce que voit le serveur de Vigie</h2>
+  <p>Le serveur de Vigie sert le site et relaie des données publiques. Son code ne tient aucun journal d’accès : il n’enregistre ni votre adresse IP, ni les adresses demandées, ni un identifiant de visiteur. Seules des erreurs techniques de fonctionnement (par exemple, une source de données indisponible) sont consignées, sans information sur vous. Les requêtes que vous envoyez (zones d’analyse ou de veille, historique demandé) servent à calculer la réponse et ne sont pas conservées.</p>
+  <p>Le serveur est hébergé chez l’éditeur ; comme tout site, il reçoit techniquement les requêtes de votre appareil, relayées par Cloudflare (section 3). Il ne contient ni base de comptes, ni base de visiteurs.</p>
+
+  <h2>7. Services tiers contactés directement par votre appareil</h2>
+  <p>Certaines données ne passent pas par le serveur de Vigie : votre navigateur les demande directement à leur fournisseur. Ce fournisseur voit alors, comme sur tout site web, votre <strong>adresse IP</strong>, le type de votre navigateur, et la <strong>zone de carte ou la requête</strong> demandée (tuiles de la région affichée, texte d’une recherche…). Il ne reçoit pas votre position GPS, ni votre adresse électronique, ni d’identifiant de Vigie. Attention toutefois : si la carte est centrée sur l’endroit où vous êtes, les tuiles demandées révèlent cette zone à ces fournisseurs, comme sur n’importe quelle carte en ligne. Chaque fournisseur est soumis à sa propre politique.</p>
+  <div class="defile">
+  <table>
+    <thead><tr><th>Catégorie</th><th>Fournisseurs</th><th>Ce qui est demandé</th></tr></thead>
+    <tbody>
+      <tr><td>Fond de carte et relief</td><td>OpenFreeMap, Mapterhorn</td><td>Tuiles de la zone affichée</td></tr>
+      <tr><td>Recherche de lieux, imagerie et relief</td><td>Géoplateforme de l’IGN (<code>data.geopf.fr</code>), <code>geo.api.gouv.fr</code></td><td>Texte tapé dans la recherche ; tuiles de photos aériennes et de LiDAR de la zone affichée ; communes à la création d’une zone de veille</td></tr>
+      <tr><td>Météo et environnement</td><td>RainViewer (radar de pluie), EUMETSAT (éclairs), NASA GIBS (imagerie satellite), Vigicrues</td><td>Images et données de la zone ou de la date affichées</td></tr>
+      <tr><td>Séismes</td><td>EMSC (seismicportal.eu)</td><td>Liste des séismes récents</td></tr>
+      <tr><td>Énergie et prix</td><td>data.economie.gouv.fr (carburants), ODRÉ (électricité)</td><td>Jeux de données publics</td></tr>
+      <tr><td>Images de caméras</td><td>Métropole de Lyon (caméras de trafic Criter)</td><td>L’image de la caméra que vous ouvrez</td></tr>
+      <tr><td>Vue photoréaliste (réglage facultatif)</td><td>Google Photorealistic 3D Tiles, via Cesium ion</td><td>Tuiles 3D de la zone affichée, seulement si vous activez cette vue</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Les autres données (trains, avions, bateaux, vent, qualité de l’air, vigilance, population, immobilier, élections, actualités…) sont collectées par le serveur de Vigie auprès de leurs sources, puis servies à votre appareil : les sources ne voient pas votre appareil. La couche « Actualité » ne présente que le titre, la source, l’heure et un lien ; le lien ouvre le site de l’éditeur, qui applique sa propre politique.</p>
+  <p>Les liens « Source » ou « Voir sur… » ouvrent les sites des fournisseurs concernés, à votre initiative.</p>
+
+  <h2>8. Ce que Vigie ne fait pas</h2>
+  <ul>
+    <li>Aucune publicité, aucun achat intégré.</li>
+    <li>Aucune mesure d’audience, aucun outil d’analyse ou de plantage tiers, aucun traceur publicitaire.</li>
+    <li>Aucune création de compte, aucune donnée vendue ou partagée à des fins commerciales.</li>
+    <li>Aucun accès à vos contacts, photos, micro, caméra, fichiers ou identifiant publicitaire.</li>
+    <li>Aucune donnée de santé, financière ou concernant des enfants.</li>
+  </ul>
+
+  <h2>9. Vos droits</h2>
+  <p>Vous disposez des droits d’accès, de rectification, d’effacement, d’opposition, de limitation et de portabilité sur les données vous concernant. Comme Vigie ne détient pas de données personnelles en dehors de la connexion décrite en section 3, une demande porte surtout sur votre adresse électronique de connexion : écrivez au contact de la section 1. Vous pouvez aussi saisir la CNIL (<a href="https://www.cnil.fr" rel="noopener noreferrer">cnil.fr</a>).</p>
+  <p>Vigie n’est pas destinée aux enfants de moins de 18 ans et n’est pas un service d’urgence : les informations affichées (météo, vigilance, crues, transports) sont indicatives ; pour votre sécurité, référez-vous aux sources officielles.</p>
+
+  <h2>10. Modifications</h2>
+  <p>Cette politique peut évoluer, par exemple si une nouvelle source de données est ajoutée. La date de dernière mise à jour figure en haut de la page.</p>
+
+  <footer><a href="/">Retour à la carte</a></footer>
+</main>
+</body>
+</html>

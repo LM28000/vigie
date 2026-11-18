@@ -126,6 +126,11 @@ export function LayerCatalog({ manager, expandedId, onExpand, autoFocus }: Layer
           </section>
         ))}
         {shown.length === 0 && groups.length === 0 && <p className="catalog__empty">Aucune couche ne correspond à « {filter} ».</p>}
+        <p className="catalog__legal">
+          <a href="/confidentialite.html" target="_blank" rel="noopener noreferrer">
+            Confidentialité
+          </a>
+        </p>
       </div>
     </div>
   );
