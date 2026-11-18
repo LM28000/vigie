@@ -61,6 +61,16 @@ Le bouton en viseur (commandes de la carte, en bas à droite) demande votre posi
 - **Surveiller autour de moi** (dans ce panneau et dans « Ajouter une zone » de la Veille) : un cercle de 10, 25 ou 50 km centré sur la position arrondie à environ 1 km. C'est la seule forme de la position qui sorte du navigateur : la zone part au serveur comme toute zone et figure dans l'adresse de partage (`veille=`).
 - **En HTTP** (réseau local) le navigateur interdit la géolocalisation : le bouton reste là et explique pourquoi ; rien d'autre ne change. Refus, position introuvable ou délai dépassé : message en français et bouton pour réessayer.
 
+### Installer l'application
+
+Vigie s'installe comme une application (PWA) : fenêtre sans barre d'adresse, icône sur l'écran d'accueil ou le bureau.
+
+- **Chrome, Edge, Android** : « Installer l'application » apparaît dans le catalogue des couches (sous « Visite guidée ») quand le navigateur propose l'installation ; un clic ouvre son invite. L'entrée disparaît une fois l'application installée ou ouverte en fenêtre autonome.
+- **iPhone et iPad** (Safari) : la même entrée déplie la marche à suivre, *Partager* puis *Sur l'écran d'accueil*.
+- **Hors ligne** : la coque de l'application (page, scripts, styles, polices) est gardée : sans réseau, Vigie s'ouvre et un avis « Hors ligne » précise que les données en direct ne se renouvellent plus. Aucune donnée n'est gardée (`/api`, tuiles, fonds de carte, 3D : toujours le réseau).
+- **Nouvelle version** : un avis « Nouvelle version disponible » propose « Recharger » ; rien ne se recharge tout seul en pleine utilisation.
+- **En HTTP** (réseau local, `http://192.168.0.75:8787`) le navigateur n'offre ni service worker ni installation : le site fonctionne comme avant, sans cette entrée. Il faut HTTPS (ou `localhost`).
+
 ### Modes de vision
 
 Le bouton en forme d'œil, parmi les commandes de la carte (en bas à droite, au-dessus de l'analyse de zone), ouvre un menu de quatre rendus appliqués à toute la carte, fond et couches comprises. Le bouton se remplit quand un mode est actif.

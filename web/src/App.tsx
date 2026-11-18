@@ -9,6 +9,7 @@ import { MapView } from './map/MapView';
 import { MODULES } from './modules';
 import { SearchBox } from './search/SearchBox';
 import { InfoPanel } from './ui/InfoPanel';
+import { PwaNotices } from './ui/Install';
 import { LayerChips } from './ui/LayerChips';
 import { LayerDrawer } from './ui/LayerDrawer';
 import { MobileSheet, type Snap } from './ui/MobileSheet';
@@ -203,6 +204,7 @@ export function App() {
       <ZoneTool manager={manager} phone={phone} />
       <PositionTool manager={manager} phone={phone} />
       <VeilleToasts manager={manager} phone={phone} />
+      <PwaNotices phone={phone} />
       <VisionControl manager={manager} />
 
       {welcome && <Welcome manager={manager} onClose={() => setWelcome(false)} />}

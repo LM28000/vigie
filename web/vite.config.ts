@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { serviceWorker } from './pwa/plugin.mjs';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), serviceWorker()],
   server: {
     port: 5173,
     // En développement, l'API est servie par le serveur Rust (dossier server/), sur cette

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { CATEGORY_LABELS, CATEGORY_ORDER, settingOptions, type LayerModule, type LegendItem, type ModuleSetting } from '../core/module';
 import type { ModuleManager, ModuleRuntimeState } from '../core/moduleManager';
 import { SCENES, activeScene, toggleScene } from '../core/scenes';
+import { InstallEntry } from './Install';
 import { TourLauncher } from './Tour';
 import { formatDateTime, formatRelative } from './format';
 import { useModuleStates, useNow } from './hooks';
@@ -89,6 +90,7 @@ export function LayerCatalog({ manager, expandedId, onExpand, autoFocus }: Layer
         {!query && (
           <section className="catalog__scenes" aria-label="Scènes">
             <TourLauncher manager={manager} />
+            <InstallEntry />
             <h3 className="kicker">Scènes</h3>
             <div className="scenes">
               {SCENES.map((scene) => (

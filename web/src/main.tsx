@@ -10,6 +10,7 @@ import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import '@fontsource/jetbrains-mono/latin-600.css';
 import { App } from './App';
+import { startPwa } from './core/pwa';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -20,3 +21,6 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+// Service worker, invite d'installation, état hors ligne (rien en développement ni hors contexte sûr).
+startPwa();

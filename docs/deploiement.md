@@ -146,6 +146,20 @@ Toutes les variables lues par le serveur (`grep -rn 'env::var' server/src`), ave
 |---|---|---|
 | `CARTE_API` | `http://127.0.0.1:8787` | Serveur auquel le proxy de Vite (`pnpm dev`) transmet `/api`. |
 
+## Application installable (PWA) et TWA Android
+
+Le site construit contient `manifest.webmanifest`, les icônes (`icons/`), `sw.js` (service worker, écrit au build par `web/pwa/plugin.mjs` avec la liste des fichiers de la coque et une version tirée de leur contenu) et `.well-known/assetlinks.json`.
+
+- **En-têtes** (`site()` dans `server/src/api.rs`, testés) : `assets/*` en `public, max-age=31536000, immutable` ; tout le reste, dont `index.html`, `sw.js` et `manifest.webmanifest` (`application/manifest+json`), en `no-cache` ; `/.well-known/*` sert le dossier du même nom (JSON en `application/json`) et rend 404 pour un fichier absent, jamais la page d'accueil.
+- **Cache du service worker** : seulement la coque (`/` et les fichiers de `assets/`), un cache par version (`vigie-coque-<version>`), les anciens supprimés à l'activation. Navigation : réseau d'abord, coque en cache si le réseau est coupé ou le serveur répond 502 à 504. Jamais interceptés : `/api/*`, `/.well-known/*`, autres sites, manifeste, icônes. Une réponse n'est gardée que si c'est un 200 du site sans redirection (une session Cloudflare Access expirée redirige vers `*.cloudflareaccess.com` : la redirection est suivie par le navigateur, jamais gardée).
+- **Cloudflare Access** : `<link rel="manifest" crossorigin="use-credentials">` envoie le cookie `CF_Authorization` avec le manifeste, sinon il serait redirigé vers la page de connexion. Pour une TWA, `/.well-known/assetlinks.json` doit répondre sans connexion : ajouter une règle Access « Bypass » pour ce chemin.
+- **TWA (Bubblewrap)** : `web/public/.well-known/assetlinks.json` contient `[]` ; le remplir avec le nom du paquet Android et l'empreinte SHA-256 du certificat de signature de Play, puis reconstruire le site :
+  ```json
+  [{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"eu.du_cray.vigie","sha256_cert_fingerprints":["AA:BB:..."]}}]
+  ```
+- **Icônes** : sources dans `design/logos/` ; `sh web/scripts/icones.sh` régénère les PNG (avec `sips`, macOS).
+- **Développement** : pas de service worker avec `pnpm dev`. Pour l'essayer : `pnpm build` puis `pnpm exec vite preview` (`localhost` est un contexte sûr).
+
 ## Mémoire, disque et réseau
 
 - **Isolation** (`compose.yaml`) : système de fichiers en lecture seule (`/tmp` en `tmpfs`), `cap_drop: ALL`, `no-new-privileges`, `mem_limit: 1g`, `cpus: 2.0`, journaux `json-file` bornés à 3 fichiers de 10 Mo.
