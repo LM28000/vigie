@@ -22,13 +22,26 @@ cd android && ~/.local/bubblewrap/node_modules/.bin/bubblewrap update --manifest
 
 ## Clé d'envoi et construction
 
-La clé d'envoi (« upload key ») est dans `~/.android-keys/vigie-upload.keystore`, alias `vigie`, et ses mots de passe dans Vaultwarden. Google Play re-signe l'app avec sa propre clé (signature des apps par Google Play).
+La clé d'envoi (« upload key ») est dans `~/.android-keys/vigie-upload.keystore`, alias `vigie`, et son mot de passe dans Vaultwarden. Google Play re-signe l'app avec sa propre clé (signature des apps par Google Play).
+
+**Ne pas signer avec `bubblewrap build`** : en cas d'erreur, il affiche la commande `apksigner` avec le mot de passe en clair. On construit sans signer, puis on signe avec des outils qui demandent le mot de passe sans l'afficher :
 
 ```sh
-cd android && ~/.local/bubblewrap/node_modules/.bin/bubblewrap build   # demande les mots de passe → app-release-bundle.aab
+cd android
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/Shared/bubblewrap-sdk
+./gradlew assembleRelease bundleRelease && ./gradlew --stop
+# bundle pour le Play Store
+/opt/homebrew/opt/openjdk@17/bin/jarsigner -keystore ~/.android-keys/vigie-upload.keystore \
+  -signedjar app-release-bundle.aab app/build/outputs/bundle/release/app-release.aab vigie
+# APK à installer directement (facultatif)
+/Users/Shared/bubblewrap-sdk/build-tools/36.1.0/zipalign -f 4 app/build/outputs/apk/release/app-release-unsigned.apk app-release-unsigned-aligned.apk
+/Users/Shared/bubblewrap-sdk/build-tools/36.1.0/apksigner sign --ks ~/.android-keys/vigie-upload.keystore \
+  --ks-key-alias vigie --out app-release-signed.apk app-release-unsigned-aligned.apk
 ```
 
-Chaque nouvelle version envoyée au Play Store demande d'augmenter `appVersionCode` dans `twa-manifest.json`.
+C'est `android/app-release-bundle.aab` (signé) qu'on envoie, pas `app/build/outputs/bundle/release/app-release.aab` (non signé, refusé par la console). Chaque nouvelle version demande d'augmenter `appVersionCode` (et `versionCode` dans `app/build.gradle`). Après un changement de chemin du SDK, arrêter le démon Gradle (`./gradlew --stop`) et supprimer `app/build`, sinon « Unable to find package java.lang ».
+
+L'app est publiée sur le canal **test interne** de la Play Console.
 
 ## Digital Asset Links
 
