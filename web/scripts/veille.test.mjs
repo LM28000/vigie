@@ -20,12 +20,17 @@ import {
   encodeRef,
   encodeZonesParam,
   feltRadiusKm,
+  isZoneShown,
   mergeZones,
+  parseDisplay,
+  pruneHidden,
   quakeEvents,
+  setZoneHidden,
   titleWithCount,
   trimAlerts,
   unreadCount,
   zoneIdOf,
+  zonesToDraw,
 } from '../src/core/veilleLogic.ts';
 
 const SQUARE = [[1.5, 46.5], [2.5, 46.5], [2.5, 47.5], [1.5, 47.5]];
@@ -252,4 +257,33 @@ test('le risque d\'avalanche fort est un type d\'événement du serveur, surveil
   assert.ok(SERVER_TYPES.includes('avalanche'), 'évalué par le serveur, pas par le site');
   assert.ok(DEFAULT_TYPES.includes('avalanche'));
   assert.match(TYPE_LABELS.avalanche, /avalanche/i);
+});
+
+test('affichage des zones : tout est visible par défaut, et un stockage abîmé retombe là-dessus', () => {
+  for (const raw of [null, undefined, 'x', 42, [], {}, { showOnMap: 'non', hidden: 'a' }]) {
+    assert.deepEqual(parseDisplay(raw), { showOnMap: true, hidden: [] });
+  }
+  assert.equal(parseDisplay({ showOnMap: false }).showOnMap, false);
+  assert.deepEqual(parseDisplay({ hidden: ['a', 'a', 3, '', null, 'b'] }).hidden, ['a', 'b']);
+});
+
+test('affichage des zones : cacher ne retire pas la zone de la veille, seulement de la carte', () => {
+  const zones = ['a', 'b', 'c'].map((id) => ({ id, name: id, ref: { kind: 'dep', code: '33' }, ring: [], departments: [], types: [...DEFAULT_TYPES] }));
+  const display = setZoneHidden(parseDisplay(null), 'b', true);
+  assert.deepEqual(zonesToDraw(zones, display).map((z) => z.id), ['a', 'c']);
+  assert.equal(zones.length, 3, 'la liste surveillée n’est pas touchée');
+  assert.equal(isZoneShown(display, 'b'), false);
+  assert.deepEqual(zonesToDraw(zones, setZoneHidden(display, 'b', false)).map((z) => z.id), ['a', 'b', 'c']);
+  assert.deepEqual(setZoneHidden(setZoneHidden(parseDisplay(null), 'a', true), 'a', true).hidden, ['a'], 'pas de doublon');
+  // le réglage général l'emporte
+  assert.deepEqual(zonesToDraw(zones, { showOnMap: false, hidden: [] }), []);
+  // il survit à un aller-retour dans le stockage
+  assert.deepEqual(parseDisplay(JSON.parse(JSON.stringify({ showOnMap: false, hidden: ['b'] }))), { showOnMap: false, hidden: ['b'] });
+});
+
+test('affichage des zones : les identifiants de zones supprimées sont oubliés, l’adresse de partage ne porte rien de l’affichage', () => {
+  const display = { showOnMap: true, hidden: ['a', 'gone'] };
+  assert.deepEqual(pruneHidden(display, [{ id: 'a' }]).hidden, ['a']);
+  const zone = { id: 'x', name: 'Cercle', ref: { kind: 'circle', center: [-0.57, 44.84], radius: 5000 }, ring: [], departments: [], types: [...DEFAULT_TYPES] };
+  assert.doesNotMatch(encodeZonesParam([zone]) ?? '', /hidden|showOnMap/);
 });

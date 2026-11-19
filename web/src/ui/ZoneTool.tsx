@@ -4,6 +4,7 @@ import { PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { IControl, MapMouseEvent, Map as MapLibreMap } from 'maplibre-gl';
 import type { ModuleManager } from '../core/moduleManager';
 import { useVeille } from '../core/veille';
+import { zonesToDraw } from '../core/veilleLogic';
 import {
   MAX_AREA_KM2,
   MAX_RADIUS_M,
@@ -180,7 +181,8 @@ export function ZoneTool({ manager, phone }: { manager: ModuleManager; phone: bo
   // Les zones surveillées se montrent quand leur panneau est ouvert (ou pendant qu'on en dessine une).
   const watch = useVeille();
   const showWatched = watch.open || zone.purpose === 'veille';
-  const watched = useMemo(() => (showWatched ? watch.zones.map((z) => z.ring as Position[]) : []), [showWatched, watch.zones]);
+  // Zones cachées (réglage local) : toujours surveillées, juste non dessinées. Le contour en cours d'édition, lui, reste dessiné.
+  const watched = useMemo(() => (showWatched ? zonesToDraw(watch.zones, watch.display).map((z) => z.ring as Position[]) : []), [showWatched, watch.zones, watch.display]);
   useEffect(() => {
     overlay.current?.setProps({ layers: overlayLayers(zone.shape, zone.draft, cursor, watched) });
   }, [map, zone.shape, zone.draft, cursor, watched]);

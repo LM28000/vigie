@@ -293,3 +293,46 @@ export function quakeEvents(quakes: readonly Quake[], distanceToZoneM: (lon: num
   }
   return events;
 }
+
+// --- Affichage des zones sur la carte -------------------------------------------------------------------------------------------
+//
+// Cacher le dessin des zones ne les retire pas de la veille : elles sont toujours relevées et leurs alertes arrivent. C'est un
+// réglage d'affichage local (`localStorage`), jamais mis dans l'adresse de partage (`veille=`).
+
+export interface ZoneDisplay {
+  /** Réglage général « Afficher les zones sur la carte » (par défaut oui). */
+  showOnMap: boolean;
+  /** Identifiants des zones cachées une à une (l'œil de chaque zone). */
+  hidden: string[];
+}
+
+/** Lit le réglage enregistré sans se fier à rien : tout ce qui est abîmé retombe sur « tout afficher ». */
+export function parseDisplay(raw: unknown): ZoneDisplay {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { showOnMap: true, hidden: [] };
+  const { showOnMap, hidden } = raw as { showOnMap?: unknown; hidden?: unknown };
+  const ids = Array.isArray(hidden) ? hidden.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 200) : [];
+  return { showOnMap: showOnMap !== false, hidden: [...new Set(ids)].slice(0, MAX_ZONES) };
+}
+
+/** Une zone se dessine-t-elle ? (réglage général actif et zone non cachée) */
+export function isZoneShown(display: ZoneDisplay, id: string): boolean {
+  return display.showOnMap && !display.hidden.includes(id);
+}
+
+/** Les zones à dessiner sur la carte. */
+export function zonesToDraw(zones: readonly VeilleZone[], display: ZoneDisplay): VeilleZone[] {
+  return zones.filter((z) => isZoneShown(display, z.id));
+}
+
+/** Cache (`hide`) ou montre une zone. */
+export function setZoneHidden(display: ZoneDisplay, id: string, hide: boolean): ZoneDisplay {
+  const rest = display.hidden.filter((h) => h !== id);
+  return { ...display, hidden: hide ? [...rest, id] : rest };
+}
+
+/** Oublie les identifiants de zones qui n'existent plus (une zone supprimée puis ajoutée à nouveau repart visible). */
+export function pruneHidden(display: ZoneDisplay, zones: readonly VeilleZone[]): ZoneDisplay {
+  const known = new Set(zones.map((z) => z.id));
+  const hidden = display.hidden.filter((id) => known.has(id));
+  return hidden.length === display.hidden.length ? display : { ...display, hidden };
+}
