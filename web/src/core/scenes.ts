@@ -45,11 +45,18 @@ export const SCENES: readonly Scene[] = [
   {
     // Hors de « Météo » : l'indice (jaune, rouge, turquoise) y recouvrirait la vigilance (jaune, orange, rouge)
     // et le radar de pluie (bleu). Le vent, lui, est blanc et montre où l'air pollué est emporté.
-    // Les pollens ont la palette officielle de l'indice ATMO : ce sont des anneaux nets, l'indice de l'air un champ flou de disques.
+    // Les pollens ont leur propre scène : même palette officielle que l'indice ATMO, et 35 000 communes
+    // superposées aux 29 000 zones de l'indice rendaient la carte illisible.
     id: 'air',
     label: 'Qualité de l’air',
-    description: 'indice ATMO, pollens, épisodes, vent',
-    modules: ['air', 'pollen', 'vent', 'jour-nuit'],
+    description: 'indice ATMO, mesures des stations, épisodes, vent',
+    modules: ['air', 'vent', 'jour-nuit'],
+  },
+  {
+    id: 'pollens',
+    label: 'Pollens',
+    description: 'indice pollen par commune et par pollen',
+    modules: ['pollen', 'jour-nuit'],
   },
   {
     id: 'energie',
