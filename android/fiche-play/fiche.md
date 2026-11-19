@@ -2,7 +2,7 @@
 
 Tout ce qu'il faut pour passer des tests internes aux **tests fermés** : textes de la fiche, réponses aux formulaires de la Play Console, visuels. Rédigé le 18 novembre 2026 d'après le code du dépôt (ce qui est collecté, ce qui sort de l'appareil : voir `web/public/confidentialite.html`, qui est la politique de confidentialité à déclarer).
 
-À compléter avant de publier : **`CONTACT_A_COMPLETER`** (adresse e-mail de contact), présent dans `web/public/confidentialite.html` et dans la section « Coordonnées » ci-dessous.
+Adresse e-mail de contact : `louis-marie@du-cray.com` (aussi dans `web/public/confidentialite.html`).
 
 ## 0. Deux points bloquants à régler avant de cliquer
 
@@ -84,7 +84,7 @@ L'accès à Vigie est protégé par une connexion sécurisée : il faut un compt
 
 | Champ | Valeur |
 | --- | --- |
-| Adresse e-mail (publique) | `CONTACT_A_COMPLETER` (obligatoire) |
+| Adresse e-mail (publique) | `louis-marie@du-cray.com` (obligatoire) |
 | Téléphone | laisser vide |
 | Site Web | laisser vide (le site est privé), ou `https://vigie.du-cray.eu/` si on accepte que Google tombe sur la page de connexion |
 | Politique de confidentialité | `https://vigie.du-cray.eu/confidentialite.html` (publique : voir section 0) |
@@ -128,7 +128,7 @@ Cocher « Les instructions ne sont pas nécessaires sur certaines versions » se
 
 ### Classification du contenu (questionnaire IARC)
 
-- Adresse e-mail de contact : `CONTACT_A_COMPLETER`.
+- Adresse e-mail de contact : `louis-marie@du-cray.com`.
 - Catégorie : **Utilitaire, productivité, communication ou autre**. (Ne pas prendre « Référence, actualités ou éducation » : ce serait la porte vers les déclarations d'application d'actualités.)
 - Violence, sang, peur : **Non** à toutes les questions. Contenu sexuel et nudité : **Non**. Grossièretés : **Non**. Drogues, alcool, tabac : **Non**. Jeux d'argent, jeux simulant l'argent : **Non**.
 - Contenu généré par les utilisateurs / interaction entre utilisateurs : **Non** (aucun profil, aucun message, aucun partage de contenu entre personnes ; les images de webcams et les titres de presse viennent d'éditeurs tiers, pas des utilisateurs de l'application).
@@ -216,7 +216,7 @@ Menu de gauche, application **Vigie**.
 4. **Croissance > Présence sur le Store > Paramètres du Store** : catégorie « Cartes et navigation », étiquettes, coordonnées (e-mail, site laissé vide). Type : Application. Enregistrer.
 5. **Tests et publication > Tests > Tests fermés** :
    - Créer une piste (ou utiliser « Tests fermés – Alpha ») > **Créer une version** > envoyer le `.aab` signé (voir `android/README.md`) ou promouvoir la version du test interne (« Promouvoir la version > Tests fermés »). Notes de version : une ligne en français entre balises `<fr-FR>…</fr-FR>`.
-   - Onglet **Testeurs** : choisir la liste d'e-mails ou un groupe Google (testeurs inscrits avec leur compte Google ; voir ci-dessous les règles du compte personnel), définir les pays (France au minimum) et l'adresse ou l'URL de commentaires (`CONTACT_A_COMPLETER`).
+   - Onglet **Testeurs** : choisir la liste d'e-mails ou un groupe Google (testeurs inscrits avec leur compte Google ; voir ci-dessous les règles du compte personnel), définir les pays (France au minimum) et l'adresse ou l'URL de commentaires (`louis-marie@du-cray.com`).
    - **Examiner la version > Lancer le déploiement** pour les tests fermés.
 6. **Tableau de bord** : vérifier qu'aucune tâche ne reste en rouge. Après le déploiement, Google examine l'application (souvent quelques heures à quelques jours). Le lien d'adhésion au test s'affiche dans l'onglet Testeurs : à envoyer aux testeurs, qui doivent aussi se connecter à Vigie (voir « Accès »).
 7. **Tests et publication > Production** : « Candidater pour la production » n'est possible qu'après la durée de test exigée.

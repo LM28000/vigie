@@ -59,4 +59,4 @@ Ajouter l'empreinte (en majuscules, octets séparés par `:`) à `assetlinks.jso
 
 ## Fiche Play Store
 
-Textes, réponses aux formulaires de la Console et visuels : [fiche-play/fiche.md](fiche-play/fiche.md). La politique de confidentialité est `web/public/confidentialite.html` (servie à `/confidentialite.html`, règle Access « Bypass » nécessaire). Restent à fournir : l'adresse de contact (`CONTACT_A_COMPLETER`) et un compte de test pour les examinateurs de Google.
+Textes, réponses aux formulaires de la Console et visuels : [fiche-play/fiche.md](fiche-play/fiche.md). La politique de confidentialité est `web/public/confidentialite.html` (servie à `/confidentialite.html`, règle Access « Bypass » nécessaire). Reste à fournir : un compte de test pour les examinateurs de Google.
