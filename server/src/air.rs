@@ -31,7 +31,7 @@ use tracing::{info, warn};
 
 use crate::state::AppState;
 
-const BASE_URL: &str = "https://admindata.atmo-france.org";
+pub(crate) const BASE_URL: &str = "https://admindata.atmo-france.org";
 const INDEX_FEED: u32 = 112;
 const EPISODES_FEED: u32 = 114;
 /// Les indices sont publiés une fois par jour : relever toutes les heures suffit à les voir
@@ -191,7 +191,7 @@ async fn login(http: &reqwest::Client, username: &str, password: &str) -> Result
 // --- Collecte ----------------------------------------------------------------------------------
 
 /// Encode un segment d'adresse : tout sauf les caractères non réservés.
-fn encode_segment(text: &str) -> String {
+pub(crate) fn encode_segment(text: &str) -> String {
     let mut out = String::with_capacity(text.len() * 2);
     for byte in text.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
@@ -209,7 +209,7 @@ fn feed_url(feed: u32, field: &str, since: Date) -> String {
     format!("{BASE_URL}/api/data/{feed}/{}", encode_segment(&filter.to_string()))
 }
 
-struct Collector {
+pub(crate) struct Collector {
     http: reqwest::Client,
     username: String,
     password: String,
@@ -217,6 +217,10 @@ struct Collector {
 }
 
 impl Collector {
+    pub(crate) fn new(http: reqwest::Client, username: String, password: String) -> Self {
+        Self { http, username, password, session: None }
+    }
+
     async fn token(&mut self) -> Result<String> {
         let valid = self.session.as_ref().filter(|s| s.expires - TOKEN_MARGIN_S > Timestamp::now().as_second());
         if let Some(session) = valid {
@@ -230,7 +234,7 @@ impl Collector {
 
     /// Corps d'une réponse, avec un nouvel essai après reconnexion si le jeton est refusé (401), et
     /// après une courte pause si l'API répond par une erreur de serveur (elle en a de passagères).
-    async fn get(&mut self, url: &str) -> Result<Vec<u8>> {
+    pub(crate) async fn get(&mut self, url: &str) -> Result<axum::body::Bytes> {
         let mut attempt = 0;
         loop {
             attempt += 1;
@@ -242,7 +246,7 @@ impl Collector {
             } else if status.is_server_error() && attempt < 3 {
                 tokio::time::sleep(Duration::from_secs(3)).await;
             } else {
-                return Ok(response.error_for_status()?.bytes().await?.to_vec());
+                return Ok(response.error_for_status()?.bytes().await?);
             }
         }
     }
@@ -281,7 +285,7 @@ pub async fn poll_forever(http: reqwest::Client, state: AppState) {
         state.set_air_disabled("pas d'identifiants Atmo Data configurés sur le serveur");
         return;
     };
-    let mut collector = Collector { http, username, password, session: None };
+    let mut collector = Collector::new(http, username, password);
     loop {
         let wait = match collector.collect().await {
             Ok((body, zones, episodes)) => {

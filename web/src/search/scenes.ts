@@ -18,7 +18,7 @@ export interface SceneDefinition {
 const KEYWORDS: Record<string, string> = {
   mouvement: 'mouvement circulation trafic',
   meteo: 'temps orage',
-  air: 'pollution ozone particules smog atmo',
+  air: 'pollution ozone particules smog atmo pollen allergie',
   energie: 'courant electrique',
   ville: 'quartier urbain',
   elections: 'vote presidentielle europeennes legislatives resultats bureau de vote scrutin',
