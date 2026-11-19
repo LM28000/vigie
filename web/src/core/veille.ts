@@ -42,7 +42,10 @@ import {
   encodeRef,
   encodeZonesParam,
   mergeZones,
+  parseDisplay,
+  pruneHidden,
   quakeEvents,
+  setZoneHidden,
   titleWithCount,
   trimAlerts,
   unreadCount,
@@ -53,13 +56,14 @@ import {
   type VeilleAlert,
   type VeilleEvent,
   type VeilleZone,
+  type ZoneDisplay,
   type ZoneRef,
 } from './veilleLogic';
 
 export type { EventType, VeilleAlert, VeilleEvent, VeilleZone } from './veilleLogic';
 
 const POLL_MS = 60_000;
-const STORAGE = { zones: 'carte-vivante:veille:zones', alerts: 'carte-vivante:veille:alerts', seen: 'carte-vivante:veille:seen', prefs: 'carte-vivante:veille:prefs' } as const;
+const STORAGE = { zones: 'carte-vivante:veille:zones', alerts: 'carte-vivante:veille:alerts', seen: 'carte-vivante:veille:seen', prefs: 'carte-vivante:veille:prefs', display: 'carte-vivante:veille:display' } as const;
 const TOAST_MS = 9_000;
 const MAX_TOASTS = 3;
 
@@ -252,6 +256,8 @@ export interface VeilleState {
   /** Types dont la source n'a pas répondu au dernier relevé. */
   unavailable: string[];
   prefs: VeillePrefs;
+  /** Affichage des zones sur la carte (local : jamais dans l'adresse de partage). */
+  display: ZoneDisplay;
   toasts: Toast[];
 }
 
@@ -285,6 +291,7 @@ class VeilleStore {
       error: null,
       checkedAt: null,
       unavailable: [],
+      display: pruneHidden(parseDisplay(load<unknown>(STORAGE.display, null)), zones),
       prefs: { sound: prefs.sound === true, notify: prefs.notify === true && NOTIFICATIONS_POSSIBLE() },
       toasts: [],
     };
@@ -354,7 +361,10 @@ class VeilleStore {
     const prefix = `${id}|`;
     this.seen = Object.fromEntries(Object.entries(this.seen).filter(([key]) => !key.startsWith(prefix)));
     const { [id]: _gone, ...active } = this.state.active;
-    this.set({ zones: this.state.zones.filter((z) => z.id !== id), alerts: this.state.alerts.filter((a) => a.zoneId !== id), active });
+    const zones = this.state.zones.filter((z) => z.id !== id);
+    const display = pruneHidden(this.state.display, zones);
+    this.set({ zones, alerts: this.state.alerts.filter((a) => a.zoneId !== id), active, display });
+    save(STORAGE.display, display);
     save(STORAGE.seen, this.seen);
     save(STORAGE.alerts, this.state.alerts);
     this.persistZones();
@@ -427,6 +437,21 @@ class VeilleStore {
   clearAlerts(): void {
     this.set({ alerts: [] });
     save(STORAGE.alerts, []);
+  }
+
+  /** Montre ou cache le dessin des zones sur la carte : les zones restent surveillées, leurs alertes arrivent. */
+  setShowOnMap(showOnMap: boolean): void {
+    this.setDisplay({ ...this.state.display, showOnMap });
+  }
+
+  /** Montre ou cache le dessin d'une seule zone. */
+  setZoneShown(id: string, shown: boolean): void {
+    this.setDisplay(setZoneHidden(this.state.display, id, !shown));
+  }
+
+  private setDisplay(display: ZoneDisplay): void {
+    this.set({ display });
+    save(STORAGE.display, display);
   }
 
   setSound(sound: boolean): void {

@@ -30,7 +30,9 @@ const PATHS: Record<string, string> = {
   foudre: 'M7 14a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17 14ZM12.5 12l-2.5 4h3l-1.5 4',
   son: 'M5 9.5v5h3.5L13 18V6L8.5 9.5ZM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11',
   'son-coupe': 'M5 9.5v5h3.5L13 18V6L8.5 9.5ZM16.5 9.5l5 5M21.5 9.5l-5 5',
-  corbeille: 'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7M10 11v5M14 11v5',
+  oeil: 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  'oeil-barre': 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM4 20L20 4',
+  corbeille:'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7M10 11v5M14 11v5',
   plus: 'M12 5v14M5 12h14',
   installer: 'M12 4v11M8 11l4 4 4-4M5 19h14',
   // « Neige et avalanches » : un flocon.

@@ -111,6 +111,9 @@ function AlertRow({ alert, isNew, now, onPick }: { alert: VeilleAlert; isNew: bo
 // --- Les zones ------------------------------------------------------------------------------------------------------------------
 
 function ZoneCard({ zone, active, manager, phone, onPicked }: { zone: VeilleZone; active: VeilleEvent[] | undefined; manager: ModuleManager; phone: boolean; onPicked: () => void }) {
+  const { display } = useVeille();
+  const showOnMap = display.showOnMap;
+  const shown = !display.hidden.includes(zone.id);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(zone.name);
   const worst = active && active.length > 0 ? (Math.max(...active.map((e) => e.severity)) as 1 | 2 | 3 | 4) : null;
@@ -132,6 +135,17 @@ function ZoneCard({ zone, active, manager, phone, onPicked }: { zone: VeilleZone
           title="Cadrer la carte sur cette zone"
         >
           {zone.name}
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => veille.setZoneShown(zone.id, !shown)}
+          aria-pressed={shown}
+          aria-label={`Afficher la zone ${zone.name} sur la carte`}
+          title={!showOnMap ? 'Zones cachées : réglage général' : shown ? 'Zone affichée sur la carte' : 'Zone cachée (toujours surveillée)'}
+          disabled={!showOnMap}
+        >
+          <Icon name={shown && showOnMap ? 'oeil' : 'oeil-barre'} size={16} />
         </button>
         <button type="button" className="icon-button" onClick={() => setEditing((v) => !v)} aria-expanded={editing} aria-label={`Réglages de la zone ${zone.name}`} title="Réglages">
           <Icon name="chevronDown" size={16} className={editing ? 'veille__flip' : undefined} />
@@ -545,6 +559,13 @@ export function VeilleView({ manager, phone, onPicked, onClose }: VeilleViewProp
               </ul>
             )}
           </section>
+        )}
+
+        {state.zones.length > 0 && (
+          <label className="veille__check">
+            <input type="checkbox" checked={state.display.showOnMap} onChange={(e) => veille.setShowOnMap(e.target.checked)} />
+            <span>Afficher les zones sur la carte</span>
+          </label>
         )}
 
         {state.zones.map((zone) => (

@@ -2,6 +2,12 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 19 novembre 2026 — Veille : cacher les zones sur la carte
+
+- **Panneau Veille** : case « Afficher les zones sur la carte » (par défaut cochée) et un œil par zone (`aria-pressed`) pour retirer le dessin des zones de la carte sans les supprimer : elles restent surveillées et leurs alertes arrivent. Le contour en cours de dessin reste visible.
+- **Réglage local** (`carte-vivante:veille:display`, lu sans se fier au contenu) : jamais dans l'adresse de partage (`veille=`) ; l'identifiant d'une zone supprimée est oublié.
+- **Tests** : 3 tests ajoutés à `web/scripts/veille.test.mjs` (`parseDisplay`, `zonesToDraw`, `setZoneHidden`, `pruneHidden`).
+
 ## 18 novembre 2026 — Qualité de l'air : mesures horaires des stations
 
 - **Serveur** (`server/src/air_mesures.rs`, `GET /api/air/mesures`) : concentrations horaires mesurées par les stations officielles (NO₂, O₃, PM10, PM2.5, SO₂) d'après le flux « temps réel » E2 du LCSQA (Geod'air), un CSV par jour réécrit chaque heure ; relevé conditionnel (`If-None-Match`) toutes les 20 min, fichier de la veille une fois par jour ; valeurs invalides écartées, outre-mer écarté (heure locale). 24 h de série par station et par polluant, en colonnes (environ 160 Ko, 56 Ko en gzip, environ 450 stations).
