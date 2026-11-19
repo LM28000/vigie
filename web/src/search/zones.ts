@@ -15,6 +15,7 @@ import type { Provider, SearchResult } from './types';
 const MAX_RESULTS = 4;
 
 const AIR_WORDS = /\b(?:qualite de l air|qualite air|qualite|air|pollution|pollue|atmo|ozone|smog|particules)\b/g;
+const POLLEN_WORDS = /\b(?:pollens?|pollinique|allergies?|allergique|rhume des foins|graminees?|bouleau|ambroisie|aulne|olivier|armoise)\b/g;
 const ALERT_WORDS = /\b(?:vigilance meteo|vigilance|alerte meteo|alerte|meteo|orages?|canicule|tempete)\b/g;
 const QUAKE_WORDS = /\b(?:tremblements? de terre|seismes?|tremblements?|secousses?)\b/g;
 const LINKS = /\b(?:de|du|des|la|le|les|a|au|en|dans|sur|pour|d|l|recent|recents|derniers|dernier)\b/g;
@@ -35,6 +36,12 @@ const airIndex = indexed<AirZones, TextIndex>((data) => new TextIndex(data.zones
 function titleCase(text: string): string {
   return text.toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (_all, before: string, letter: string) => before + letter.toUpperCase());
 }
+
+// --- Pollens, par commune ---
+
+interface PollenZones { zones: { name: string[]; lon: number[]; lat: number[]; code: string[] } }
+
+const pollenIndex = indexed<PollenZones, TextIndex>((data) => new TextIndex(data.zones.name.map((name) => pad(name))));
 
 // --- Vigilance, par département ---
 
@@ -71,6 +78,8 @@ export const zonesProvider: Provider = {
   warm({ manager }) {
     const air = dataOf<AirZones>(manager, 'air');
     if (air) airIndex(air);
+    const pollen = dataOf<PollenZones>(manager, 'pollen');
+    if (pollen) pollenIndex(pollen);
   },
 
   search(query, ctx) {
@@ -96,6 +105,29 @@ export const zonesProvider: Provider = {
           subtitle: `Qualité de l’air · ${airData.zones.epci[i] ? 'intercommunalité' : 'commune'}`,
           score: score + 60, // un mot-clé a été tapé : c'est bien cela qu'on cherche
           run: () => openObject(manager, 'air', { i }, { fallback: { lon: airData.zones.lon[i]!, lat: airData.zones.lat[i]! }, zoom: 10 }),
+        });
+      }
+    }
+
+    const pollen = without(query, POLLEN_WORDS);
+    const pollenData = pollen && pollen.text.length >= 3 ? dataOf<PollenZones>(manager, 'pollen') : undefined;
+    if (pollen && pollenData) {
+      const index = pollenIndex(pollenData);
+      const top = new TopK<number>(MAX_RESULTS);
+      const bonus = shownBonus(manager, 'pollen');
+      for (const i of index.candidates(pollen)) {
+        const text = index.texts[i]!;
+        const match = matchScore(text, pollen);
+        if (match > 0) top.push(rank(text, pollen, match) + bonus, i);
+      }
+      for (const { score, item: i } of top.result()) {
+        out.push({
+          key: `pollen:${i}`,
+          kind: 'zone',
+          title: titleCase(pollenData.zones.name[i]!),
+          subtitle: `Pollens · commune (${pollenData.zones.code[i]!.slice(0, 2)})`,
+          score: score + 60,
+          run: () => openObject(manager, 'pollen', { i }, { fallback: { lon: pollenData.zones.lon[i]!, lat: pollenData.zones.lat[i]! }, zoom: 10 }),
         });
       }
     }

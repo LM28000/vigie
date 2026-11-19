@@ -49,6 +49,9 @@ struct Inner {
     air_disabled: RwLock<Option<&'static str>>,
     /// Qualité de l'air, mesures horaires aux stations (LCSQA / Geod'air).
     air_mesures: RwLock<Option<Bytes>>,
+    /// Indice pollen (Atmo France / AASQA), et la raison de son absence (pas d'identifiants Atmo Data).
+    pollen: RwLock<Option<Bytes>>,
+    pollen_disabled: RwLock<Option<&'static str>>,
     /// Les deux morceaux de la réponse des transports (positions publiées, positions estimées), assemblés en `transit`.
     transit_parts: Mutex<TransitParts>,
     /// Tuiles vectorielles (population…) et la grille de population des isochrones (voir `tiles/`).
@@ -79,6 +82,8 @@ impl AppState {
             air: RwLock::new(None),
             air_disabled: RwLock::new(None),
             air_mesures: RwLock::new(None),
+            pollen: RwLock::new(None),
+            pollen_disabled: RwLock::new(None),
             transit_parts: Mutex::default(),
             tiles: crate::tiles::Registry::new(),
         }))
@@ -254,6 +259,22 @@ impl AppState {
 
     pub fn set_air_mesures(&self, body: Vec<u8>) {
         *self.0.air_mesures.write().expect("verrou des mesures de l'air") = Some(Bytes::from(body));
+    }
+
+    pub fn pollen(&self) -> Option<Bytes> {
+        self.0.pollen.read().expect("verrou de l'indice pollen").clone()
+    }
+
+    pub fn set_pollen(&self, body: Vec<u8>) {
+        *self.0.pollen.write().expect("verrou de l'indice pollen") = Some(Bytes::from(body));
+    }
+
+    pub fn pollen_disabled(&self) -> Option<&'static str> {
+        *self.0.pollen_disabled.read().expect("verrou de l'indice pollen")
+    }
+
+    pub fn set_pollen_disabled(&self, reason: &'static str) {
+        *self.0.pollen_disabled.write().expect("verrou de l'indice pollen") = Some(reason);
     }
 
     pub fn air_disabled(&self) -> Option<&'static str> {

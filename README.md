@@ -46,7 +46,7 @@ Avions (ADS-B) et navires (AIS) en maquettes 3D construites dans le code, à leu
 
 ### Météo et environnement
 
-Vent animé, radar de pluie, vigilance météo et crues, qualité de l'air, marées, feux détectés par satellite, séismes, jour et nuit réels avec ombres des bâtiments.
+Vent animé, radar de pluie, vigilance météo et crues, qualité de l'air et pollens, marées, feux détectés par satellite, séismes, jour et nuit réels avec ombres des bâtiments.
 
 ![Vent, radar de pluie et vigilance météo](docs/images/meteo.jpg)
 
@@ -163,7 +163,7 @@ Deux idées structurent le code : **le temps est au cœur du système** (une hor
 
 ## Données et licences
 
-La carte affiche des données ouvertes de nombreuses sources, chacune avec sa licence : OpenStreetMap (ODbL), SNCF et Île-de-France Mobilités (ODbL), IGN (Licence Etalab 2.0), INSEE, ARCEP, ministère de l'Intérieur et ministère de la Culture (Licence Ouverte), DGFiP (DVF), ONISR, Shom, Météo-France via Open-Meteo, RainViewer, adsb.lol (ODbL), aisstream.io, CelesTrak, NASA FIRMS, Atmo France, LCSQA (Geod'air). Le crédit de chaque couche s'affiche dans le panneau des couches, et ceux du fond de carte en bas à droite de la carte.
+La carte affiche des données ouvertes de nombreuses sources, chacune avec sa licence : OpenStreetMap (ODbL), SNCF et Île-de-France Mobilités (ODbL), IGN (Licence Etalab 2.0), INSEE, ARCEP, ministère de l'Intérieur et ministère de la Culture (Licence Ouverte), DGFiP (DVF), ONISR, Shom, Météo-France via Open-Meteo, RainViewer, adsb.lol (ODbL), aisstream.io, CelesTrak, NASA FIRMS, Atmo France (qualité de l'air, pollens), LCSQA (Geod'air). Le crédit de chaque couche s'affiche dans le panneau des couches, et ceux du fond de carte en bas à droite de la carte.
 
 Deux conditions à connaître avant de réutiliser ou de déployer :
 

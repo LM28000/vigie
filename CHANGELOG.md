@@ -2,6 +2,13 @@
 
 Historique du projet, regroupé par phase et par date, reconstruit à partir de l'historique git (`git log --reverse --format='%ad %s' --date=short`). Le projet n'a pas de numéro de version : les phases sont celles de la [feuille de route](docs/feuille-de-route.md). Les commits de fusion ne sont pas repris.
 
+## 19 novembre 2026 — Pollens : indice pollen par commune
+
+- **Source** : flux 122 « Indice pollen » d'Atmo Data (Atmo France / AASQA), même compte que l'indice ATMO. Il porte l'indice global et six sous-indices (aulne, bouleau, olivier, graminées, armoise, ambroisie), niveaux 1 à 6 (très faible à extrêmement élevé), pour 34 800 communes, aujourd'hui et les deux jours suivants. Le flux n'a aucune géométrie : le serveur place les communes à leur centre (`server/src/data/communes_centres.tsv`, tiré de geo.api.gouv.fr, 34 746 communes ; 68 anciens codes de communes fusionnées sont écartés).
+- **Serveur** (`server/src/pollen.rs`, `GET /api/pollen`) : un jour pèse 22 Mo en un seul bloc ; il est relevé par lots d'associations (2 à 4 Mo, plus un lot « tout le reste » qui rattrape une association nouvelle) et jamais plus d'un lot en mémoire. Le catalogue (`/api/feeds`, 7 Ko) est consulté toutes les 30 min et le flux n'est relevé que s'il a été mis à jour ou que le jour a changé (2 à 3 relevés par jour). Réponse en colonnes : 7 caractères par commune et par jour (global puis six taxons), `o` pour « niveau 1 avec concentration nulle » (hors saison), `-` pour non évalué ; environ 2,2 Mo, 410 Ko en gzip. `air.rs` partage son client (jeton JWT) et lit désormais les réponses sans copie.
+- **Carte** (`web/src/modules/pollen.ts`, `pollenLogic.ts`) : couche native d'anneaux nets (la palette officielle est celle de l'indice ATMO ; anneaux nets plutôt que champ flou), réglage « Pollen » (le pire ou un taxon), « aucun pollen » en gris discret et résumé « hors saison, aucun pollen annoncé », fiche de commune (niveau global, pollen dominant, niveau de chaque taxon, jours publiés), recherche « pollen Lyon ». Scène « Pollens » à part : superposée aux 29 000 zones de l'indice ATMO, avec la même palette, la carte devenait illisible.
+- **Tests** : 10 tests Rust sur une fixture réelle (7 communes, 3 jours), `web/scripts/pollen.test.mjs`.
+
 ## 19 novembre 2026 — Veille : cacher les zones sur la carte
 
 - **Panneau Veille** : case « Afficher les zones sur la carte » (par défaut cochée) et un œil par zone (`aria-pressed`) pour retirer le dessin des zones de la carte sans les supprimer : elles restent surveillées et leurs alertes arrivent. Le contour en cours de dessin reste visible.

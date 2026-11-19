@@ -23,6 +23,7 @@
 //! - `GET /api/marees` : niveau de la mer aux marégraphes (Shom, REFMAR), 48 h de mesures et estimation des marées.
 //! - `GET /api/rivieres` : hauteur, débit et tendance sur 3 h des stations hydrométriques (Hub'Eau) ; `GET /api/rivieres/{code}` : courbe de 48 h d'une station.
 //! - `GET /api/air` : indice ATMO de qualité de l'air par commune, et épisodes de pollution (Atmo France / AASQA).
+//! - `GET /api/pollen` : indice pollen par commune (aulne, bouleau, olivier, graminées, armoise, ambroisie), aujourd'hui et les deux jours suivants (Atmo France / AASQA).
 //! - `GET /api/air/mesures` : concentrations horaires (NO2, O3, PM10, PM2.5, SO2) aux stations de mesure, avec leurs 24 dernières heures (LCSQA / Geod'air, AASQA).
 //! - `GET /api/trains?from=…&to=…` : les trains qui roulent entre deux instants
 //!   (secondes UTC), avec leurs arrêts et leurs horaires prévus et réels. Le
@@ -105,6 +106,7 @@ pub fn router(state: AppState, web_dir: Option<&std::path::Path>) -> Router {
         .route("/api/vigilance", get(|State(state): State<AppState>| async move { prepared(state.vigilance(), "vigilance") }))
         .route("/api/marees", get(|State(state): State<AppState>| async move { prepared(state.tides(), "marées") }))
         .route("/api/air", get(air))
+        .route("/api/pollen", get(pollen))
         .route("/api/air/mesures", get(|State(state): State<AppState>| async move { prepared(state.air_mesures(), "mesures de la qualité de l'air") }))
         .route("/api/rivieres", get(|| async { crate::rivers::response() }))
         .route("/api/rivieres/{code}", get(crate::rivers::series_handler))
@@ -331,6 +333,14 @@ async fn air(State(state): State<AppState>) -> axum::response::Response {
     match state.air_disabled() {
         Some(reason) => (StatusCode::SERVICE_UNAVAILABLE, format!("qualité de l'air : {reason}")).into_response(),
         None => prepared(state.air(), "qualité de l'air"),
+    }
+}
+
+/// Indice pollen : 503 avec la raison quand la couche est désactivée (pas d'identifiants Atmo Data).
+async fn pollen(State(state): State<AppState>) -> axum::response::Response {
+    match state.pollen_disabled() {
+        Some(reason) => (StatusCode::SERVICE_UNAVAILABLE, format!("indice pollen : {reason}")).into_response(),
+        None => prepared(state.pollen(), "indice pollen"),
     }
 }
 

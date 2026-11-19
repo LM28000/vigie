@@ -19,6 +19,7 @@ const KEYWORDS: Record<string, string> = {
   mouvement: 'mouvement circulation trafic',
   meteo: 'temps orage',
   air: 'pollution ozone particules smog atmo',
+  pollens: 'pollen pollens allergie rhume des foins bouleau graminées ambroisie',
   energie: 'courant electrique',
   ville: 'quartier urbain',
   elections: 'vote presidentielle europeennes legislatives resultats bureau de vote scrutin',

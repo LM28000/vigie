@@ -30,6 +30,7 @@ import { neige } from './neige';
 import { parkings } from './parkings';
 import { photoreal } from './photoreal';
 import { planes } from './planes';
+import { pollen } from './pollen';
 import { population } from './population';
 import { power } from './power';
 import { railways } from './railways';
@@ -47,7 +48,7 @@ import { wind } from './wind';
 
 export const MODULES: LayerModule[] = [
   trains, railways, isochrones, traffic, planes, ships, transit, bikes, parkings,
-  floods, rivers, tides, weatherAlerts, neige, air, fires, earthquakes,
+  floods, rivers, tides, weatherAlerts, neige, air, pollen, fires, earthquakes,
   power, chargers, fuel, population, couverture, immobilier, elections, actualite,
   dayNight, buildingShadows, satellites, jamming, rain, lightning, satelliteImagery, wind,
   aerialPhotos, lidar, photoreal, cameras, monuments, accidents, evenements,
