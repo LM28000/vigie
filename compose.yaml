@@ -60,7 +60,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 1g
+    mem_limit: 1536m
     cpus: 2.0
     logging:
       driver: json-file
